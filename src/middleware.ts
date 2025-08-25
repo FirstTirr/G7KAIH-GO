@@ -34,7 +34,7 @@ export async function middleware(request: NextRequest) {
   const pathname = request.nextUrl.pathname
 
   // Public routes that don't require authentication
-  const publicRoutes = ['/login', '/auth/callback', '/auth/confirm', '/error', '/auth/auth-code-error']
+  const publicRoutes = ['/login', '/auth/callback', '/auth/confirm', '/error', '/auth/auth-code-error', '/tos']
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
 
   // Redirect unauthenticated users to login
@@ -65,19 +65,59 @@ export async function middleware(request: NextRequest) {
 
       // Route protection based on role
       if (pathname.startsWith('/dashboard') && roleName !== 'admin') {
-        return NextResponse.redirect(new URL('/unknown', request.url))
+        // Redirect to appropriate role page instead of unknown
+        switch (roleName) {
+          case 'teacher':
+            return NextResponse.redirect(new URL('/guru', request.url))
+          case 'student':
+            return NextResponse.redirect(new URL('/siswa', request.url))
+          case 'parent':
+            return NextResponse.redirect(new URL('/orangtua', request.url))
+          default:
+            return NextResponse.redirect(new URL('/unknown', request.url))
+        }
       }
       
       if (pathname.startsWith('/siswa') && roleName !== 'student') {
-        return NextResponse.redirect(new URL('/unknown', request.url))
+        // Redirect to appropriate role page instead of unknown
+        switch (roleName) {
+          case 'admin':
+            return NextResponse.redirect(new URL('/dashboard', request.url))
+          case 'teacher':
+            return NextResponse.redirect(new URL('/guru', request.url))
+          case 'parent':
+            return NextResponse.redirect(new URL('/orangtua', request.url))
+          default:
+            return NextResponse.redirect(new URL('/unknown', request.url))
+        }
       }
       
       if (pathname.startsWith('/guru') && roleName !== 'teacher') {
-        return NextResponse.redirect(new URL('/unknown', request.url))
+        // Redirect to appropriate role page instead of unknown
+        switch (roleName) {
+          case 'admin':
+            return NextResponse.redirect(new URL('/dashboard', request.url))
+          case 'student':
+            return NextResponse.redirect(new URL('/siswa', request.url))
+          case 'parent':
+            return NextResponse.redirect(new URL('/orangtua', request.url))
+          default:
+            return NextResponse.redirect(new URL('/unknown', request.url))
+        }
       }
       
       if (pathname.startsWith('/orangtua') && roleName !== 'parent') {
-        return NextResponse.redirect(new URL('/unknown', request.url))
+        // Redirect to appropriate role page instead of unknown
+        switch (roleName) {
+          case 'admin':
+            return NextResponse.redirect(new URL('/dashboard', request.url))
+          case 'teacher':
+            return NextResponse.redirect(new URL('/guru', request.url))
+          case 'student':
+            return NextResponse.redirect(new URL('/siswa', request.url))
+          default:
+            return NextResponse.redirect(new URL('/unknown', request.url))
+        }
       }
 
       // Users with role 'unknown' can only access /unknown

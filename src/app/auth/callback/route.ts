@@ -17,35 +17,50 @@ export async function GET(request: Request) {
         // Wait a bit for trigger to complete
         await new Promise(resolve => setTimeout(resolve, 1000))
         
-        // Get user profile first
+        // Try to get by userid first
         let { data: profile } = await supabase
           .from('user_profiles')
           .select('userid, username, roleid')
           .eq('userid', user.id)
           .single()
 
-        // If no profile exists, create one manually
         if (!profile) {
-          console.log('No profile found, creating one...')
-          
-          // Create profile with unknown role
-          const { error: insertError } = await supabase
-            .from('user_profiles')
-            .insert({
-              userid: user.id,
-              username: user.email?.split('@')[0] || 'user',
-              roleid: 1 // unknown role
-            })
-
-          if (!insertError) {
-            // Fetch the created profile
-            const { data: newProfile } = await supabase
+          // If not found, try to find an existing profile by email and link it
+          const userEmail = user.email ?? null
+          if (userEmail) {
+            const { data: byEmail } = await supabase
               .from('user_profiles')
               .select('userid, username, roleid')
-              .eq('userid', user.id)
+              .eq('email', userEmail)
+              .maybeSingle()
+
+            if (byEmail) {
+              // Link existing email profile to this auth user id
+              const { data: updated } = await supabase
+                .from('user_profiles')
+                .update({ userid: user.id })
+                .eq('email', userEmail)
+                .select('userid, username, roleid')
+                .single()
+              profile = updated ?? byEmail
+            }
+          }
+
+          // Still no profile, create one manually
+          if (!profile) {
+            const defaultUsername = user.email?.split('@')[0] || 'user'
+            const { data: created } = await supabase
+              .from('user_profiles')
+              .insert({
+                userid: user.id,
+                username: defaultUsername,
+                email: user.email ?? null,
+                roleid: 1, // unknown role
+              })
+              .select('userid, username, roleid')
               .single()
-            
-            profile = newProfile
+
+            profile = created ?? null
           }
         }
 

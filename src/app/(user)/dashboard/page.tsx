@@ -1,8 +1,10 @@
 
-const page = () => {
+import UsersTable from "@/components/users/users-table"
+
+export default function Page() {
   return (
-    <div>dashboard</div>
+    <div className="p-4">
+      <UsersTable />
+    </div>
   )
 }
-
-export default page

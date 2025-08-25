@@ -1,0 +1,279 @@
+# SYARAT DAN KETENTUAN PENGGUNAAN
+## Aplikasi Web G7KAIH SMKN 4 Payakumbuh
+
+**Versi: 1.0**  
+**Tanggal Berlaku: [saat aplikasi di launching]**  
+**Terakhir Diperbarui: [belum ada]**
+
+---
+
+## 1. DEFINISI DAN INTERPRETASI
+
+### 1.1 Definisi
+- **"Aplikasi"** berarti aplikasi web G7KAIH yang dikelola oleh SMKN 4 Payakumbuh
+- **"G7KAIH"** berarti Gerakan 7 Kebiasaan Anak Indonesia Hebat, program Kemendikbudristek
+- **"Sekolah"** berarti SMK Negeri 4 Payakumbuh
+- **"Pengguna"** berarti siswa, guru, dan orang tua yang menggunakan aplikasi
+- **"Siswa"** berarti siswa jurusan PPLG SMKN 4 Payakumbuh yang terdaftar dalam aplikasi
+- **"Validator"** berarti guru dan orang tua yang bertugas memvalidasi aktivitas siswa
+- **"Ketujuh Kebiasaan"** berarti: bangun pagi, beribadah, berolahraga, makan sehat dan bergizi, gemar belajar, bermasyarakat, dan tidur cepat
+
+### 1.2 Interpretasi
+Syarat dan ketentuan ini berlaku untuk semua pengguna aplikasi G7KAIH SMKN 4 Payakumbuh.
+
+---
+
+## 2. PENERIMAAN SYARAT DAN KETENTUAN
+
+### 2.1 Persetujuan
+Dengan menggunakan aplikasi ini, Anda menyatakan bahwa:
+- Anda telah membaca, memahami, dan menyetujui seluruh syarat dan ketentuan
+- Anda berkomitmen untuk mematuhi aturan yang berlaku
+
+### 2.2 Kapasitas Hukum
+- Siswa pengguna adalah siswa aktif jurusan PPLG SMKN 4 Payakumbuh
+- Orang tua/wali memiliki otoritas untuk memberikan validasi
+- Guru adalah pendidik resmi SMKN 4 Payakumbuh yang ditunjuk sebagai validator
+
+---
+
+## 3. DESKRIPSI LAYANAN
+
+### 3.1 Tujuan Aplikasi
+Aplikasi ini dikembangkan untuk mendukung implementasi program G7KAIH dari Kemendikbudristek melalui:
+- Pemantauan dan pelaporan aktivitas harian siswa
+- Validasi kegiatan oleh guru dan orang tua
+- Pembentukan karakter positif siswa
+
+### 3.2 Fitur Utama
+- **Jurnal Harian**: Siswa melaporkan kegiatan ketujuh kebiasaan sebelum tidur
+- **Upload Foto Bukti**: Dokumentasi visual aktivitas yang dilakukan
+- **Sistem Validasi**: Verifikasi aktivitas oleh guru dan orang tua
+- **Dashboard Monitoring**: Tampilan progress dan statistik kegiatan
+
+### 3.3 Akses Layanan
+- Aplikasi berbasis web yang dapat diakses melalui browser
+- Tersedia 24/7 dengan kemungkinan maintenance terjadwal
+- Akses dibatasi pada komunitas SMKN 4 Payakumbuh
+
+---
+
+## 4. REGISTRASI DAN AKUN PENGGUNA
+
+### 4.1 Persyaratan Registrasi
+**Untuk Siswa:**
+- Siswa aktif jurusan PPLG SMKN 4 Payakumbuh
+- Memiliki NISN dan NIS yang valid
+
+**Untuk Guru:**
+- Pendidik resmi SMKN 4 Payakumbuh
+- Ditunjuk sebagai validator program G7KAIH
+- Memiliki NIP yang valid
+
+**Untuk Orang Tua:**
+- Orang tua/wali sah siswa yang terdaftar
+- Memiliki hubungan keluarga yang dapat diverifikasi
+
+### 4.2 Keamanan Akun
+- Pengguna bertanggung jawab menjaga kerahasiaan login credentials
+- Segera laporkan jika terjadi penyalahgunaan akun
+- Sekolah berhak menonaktifkan akun yang melanggar aturan
+
+### 4.3 Akun Tidak Dapat Dipindahtangankan
+Akun bersifat personal dan tidak dapat dipindahtangankan kepada pihak lain.
+
+---
+
+## 5. KEWAJIBAN DAN HAK PENGGUNA
+
+### 5.1 Kewajiban Siswa
+- Melaporkan aktivitas ketujuh kebiasaan secara jujur dan akurat
+- Mengisi jurnal harian sebelum tidur
+- Menyediakan foto bukti yang relevan dan pantas
+- Tidak berbagi informasi login dengan pihak lain
+- Menggunakan aplikasi sesuai tujuan pendidikan
+
+### 5.2 Kewajiban Guru
+- Memvalidasi laporan siswa secara objektif dan konstruktif
+- Memberikan feedback yang mendidik
+- Menjaga kerahasiaan data siswa
+- Melaporkan penyalahgunaan aplikasi
+
+### 5.3 Kewajiban Orang Tua
+- Memvalidasi aktivitas anak di lingkungan rumah
+- Mendampingi anak dalam penggunaan aplikasi
+- Berkomunikasi dengan sekolah terkait perkembangan anak
+
+### 5.4 Hak Pengguna
+- Mengakses dan menggunakan fitur aplikasi sesuai peran
+- Mendapatkan dukungan teknis dari administrator
+- Meminta klarifikasi atas kebijakan aplikasi
+- Mengajukan saran perbaikan aplikasi
+
+---
+
+## 6. PENGGUNAAN YANG DILARANG
+
+Pengguna dilarang:
+- Mengunggah konten yang tidak pantas, ofensif, atau melanggar norma
+- Memalsukan data atau informasi aktivitas
+- Menggunakan aplikasi untuk tujuan selain program G7KAIH
+- Mengganggu atau meretas sistem aplikasi
+- Membagikan akses akun kepada pihak tidak berwenang
+- Mengunggah foto yang mengandung unsur SARA, kekerasan, atau pornografi
+- Menggunakan aplikasi untuk bullying atau intimidasi
+- Mengunggah foto yang sama dengan yang sebelumnya sudah pernah di inputkan atau sama dengan siswa lain
+
+---
+
+## 7. KONTEN DAN HAK KEKAYAAN INTELEKTUAL
+
+### 7.1 Konten Pengguna
+- Siswa tetap memiliki hak atas konten yang mereka buat (jurnal dan foto)
+- Dengan mengunggah konten, siswa memberikan lisensi kepada sekolah untuk menggunakan konten tersebut dalam konteks program G7KAIH
+- Foto bukti tidak akan dibagikan kepada pengguna lain tanpa persetujuan
+
+### 7.2 Konten Aplikasi
+- Logo, desain, dan fitur aplikasi adalah milik SMKN 4 Payakumbuh
+- Program G7KAIH adalah milik Kemendikbudristek
+- Pengguna tidak diperkenankan menyalin atau mendistribusikan konten aplikasi
+
+---
+
+## 8. PRIVASI DAN PERLINDUNGAN DATA
+
+### 8.1 Jenis Data yang Dikumpulkan
+- **Data Pribadi**: Nama, NISN/NIS/NIP, kelas, kontak, email
+- **Data Aktivitas**: Jurnal harian, foto bukti kegiatan
+- **Data Teknis**: Log akses, timestamp, IP address
+- **Data Komunikasi**: Pesan dan feedback dari validator
+
+### 8.2 Tujuan Penggunaan Data
+- Monitoring dan evaluasi program G7KAIH
+- Komunikasi antara siswa, guru, dan orang tua
+- Pelaporan ke Kemendikbudristek (mungkin)
+- Perbaikan layanan aplikasi
+- Data digunakan untuk training machine learning
+
+### 8.3 Penyimpanan dan Keamanan Data
+- Data disimpan dan dienkripsi setiap bulan
+- Data tetap disimpan setelah siswa lulus untuk keperluan evaluasi program
+- Akses data dibatasi sesuai peran pengguna
+- Backup data dilakukan secara berkala
+
+### 8.4 Pembagian Data
+- Data tidak dibagikan kepada pihak ketiga tanpa persetujuan
+- Kemungkinan pengiriman data ke Kemendikbudristek untuk evaluasi program nasional
+- Data statistik dapat digunakan untuk keperluan penelitian pendidikan (tanpa identitas personal)
+
+### 8.5 Hak Pengguna atas Data
+- Mengakses data pribadi mereka
+- Meminta koreksi data yang tidak akurat
+- Meminta penjelasan penggunaan data
+
+---
+
+## 9. KETERSEDIAAN LAYANAN
+
+### 9.1 Uptime dan Maintenance
+- Sekolah berupaya menjaga aplikasi tersedia 24/7
+- Maintenance terjadwal akan diinformasikan sebelumnya
+- Gangguan teknis akan diperbaiki sesegera mungkin
+
+### 9.2 Dukungan Teknis
+- Tim IT sekolah menyediakan dukungan teknis pada jam kerja
+- Panduan penggunaan tersedia dalam aplikasi
+- Forum bantuan untuk pengguna
+
+---
+
+## 10. PEMBATASAN TANGGUNG JAWAB
+
+### 10.1 Tanggung Jawab Sekolah
+SMKN 4 Payakumbuh tidak bertanggung jawab atas:
+- Kerugian akibat gangguan teknis atau downtime
+- Kesalahan data yang diinput oleh pengguna
+- Penyalahgunaan aplikasi oleh pengguna
+- Kerugian tidak langsung akibat penggunaan aplikasi
+
+### 10.2 Batasan Ganti Rugi
+Ganti rugi terbatas pada perbaikan layanan atau penggantian data yang hilang akibat kesalahan sistem.
+
+---
+
+## 11. PELANGGARAN DAN SANKSI
+
+### 11.1 Jenis Pelanggaran
+- Pelanggaran ringan: Keterlambatan input, data tidak lengkap
+- Pelanggaran sedang: Input data palsu, penggunaan tidak sesuai
+- Pelanggaran berat: Penyalahgunaan sistem, konten tidak pantas
+
+### 11.2 Sanksi
+- **Peringatan**: Untuk pelanggaran ringan
+- **Pembatasan akses**: Untuk pelanggaran berulang
+- **Penonaktifan akun**: Untuk pelanggaran berat
+- **Sanksi akademik**: Sesuai aturan sekolah
+
+### 11.3 Proses Penanganan
+- Investigasi pelanggaran oleh tim IT sekolah
+- Hak bela diri bagi pengguna yang dituduh melanggar
+- Keputusan sanksi oleh kepala sekolah
+
+---
+
+## 12. PERUBAHAN SYARAT DAN KETENTUAN
+
+### 12.1 Hak Mengubah
+Sekolah berhak mengubah syarat dan ketentuan kapan pun.
+
+### 12.2 Pemberitahuan Perubahan
+Perubahan akan diumumkan melalui:
+-Saat penyelenggaraan upacara/muhadharah/apel pagi.
+
+### 12.3 Persetujuan Perubahan
+Penggunaan aplikasi setelah perubahan berlaku dianggap sebagai persetujuan atas perubahan tersebut.
+
+---
+
+## 13. PENYELESAIAN SENGKETA
+
+### 13.1 Mediasi Internal
+Sengketa akan diselesaikan melalui mediasi internal dengan melibatkan:
+- Guru BK sekolah
+- Kepala sekolah
+- Komite sekolah (jika diperlukan)
+
+### 13.2 Yurisdiksi
+Jika mediasi gagal, sengketa akan diselesaikan melalui pengadilan yang berwenang di Payakumbuh, Sumatera Barat.
+
+---
+
+## 14. KETENTUAN UMUM
+
+### 14.1 Hukum yang Berlaku
+Syarat dan ketentuan ini tunduk pada hukum Indonesia dan peraturan Kemendikbudristek.
+
+### 14.2 Keterpisahan
+Jika salah satu ketentuan dinyatakan tidak berlaku, ketentuan lainnya tetap berlaku.
+
+### 14.3 Keseluruhan Perjanjian
+Dokumen ini merupakan keseluruhan perjanjian antara pengguna dan sekolah terkait penggunaan aplikasi.
+
+---
+
+## 15. KONTAK DAN INFORMASI	
+
+**SMKN 4 Payakumbuh**
+- Alamat: [Jl. Muchtar Latief, Padang Sikabu, Kec. Lamposi Tigo Nagori, Kota Payakumbuh, Sumatera Barat 26219]
+- Email: [smkn4pyk@gmail.com]
+- Website: [https://web.smkn4pyk.sch.id/]
+
+**Tim IT Aplikasi G7KAIH:**
+- Email: [expduta@gmail.com]
+- Jam Kerja: Senin-Jumat, 07.00-16.00 WIB
+
+---
+
+*Dengan menggunakan aplikasi G7KAIH SMKN 4 Payakumbuh, Anda menyatakan telah membaca, memahami, dan menyetujui seluruh syarat dan ketentuan di atas.*
+
+**Dokumen ini berlaku efektif sejak: [sejak aplikasi di launching]**
