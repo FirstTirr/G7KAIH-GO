@@ -1,12 +1,12 @@
 import { createClient } from "@/utils/supabase/server"
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 
 export async function PATCH(
-  request: Request,
-  { params }: { params: { userid: string } }
+  request: NextRequest,
+  { params }: { params: Promise<{ userid: string }> }
 ) {
   try {
-    const { userid } = params
+    const { userid } = await params
     const payload = await request.json()
     const update: Record<string, any> = {}
   for (const key of ["username", "email", "roleid", "kelas"]) {
@@ -32,11 +32,11 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: Request,
-  { params }: { params: { userid: string } }
+  _request: NextRequest,
+  { params }: { params: Promise<{ userid: string }> }
 ) {
   try {
-    const { userid } = params
+    const { userid } = await params
     const supabase = await createClient()
     const { error } = await supabase
       .from("user_profiles")

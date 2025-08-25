@@ -9,6 +9,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
+import { Pencil, RefreshCcw, Search, Trash2, UserPlus } from "lucide-react"
 import React from "react"
 
 type UserProfile = {
@@ -30,10 +31,45 @@ function truncateId(id: string, len = 6) {
     : `${id.slice(0, len)}…${id.slice(-len)}`
 }
 
+function roleName(id?: number | null) {
+  if (!id || id === 1) return "" // hide unknown
+  switch (id) {
+    case 2:
+      return "teacher"
+    case 3:
+      return "admin"
+    case 4:
+      return "parent"
+    case 5:
+      return "student"
+    default:
+      return String(id)
+  }
+}
+
+function roleBadge(name?: string) {
+  if (!name) return null
+  const color =
+    name === "admin" ? "bg-blue-100 text-blue-700" :
+    name === "teacher" ? "bg-indigo-100 text-indigo-700" :
+    name === "parent" ? "bg-amber-100 text-amber-700" :
+    name === "student" ? "bg-green-100 text-green-700" :
+    "bg-gray-100 text-gray-700"
+  return (
+    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${color}`}>
+      {name}
+    </span>
+  )
+}
+
 export default function UsersTable() {
   const [rows, setRows] = React.useState<UserProfile[] | null>(null)
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [page, setPage] = React.useState(1)
+  const [pageSize, setPageSize] = React.useState(10)
+  const [total, setTotal] = React.useState(0)
+  const [q, setQ] = React.useState("")
 
   const [createOpen, setCreateOpen] = React.useState(false)
   const [editOpen, setEditOpen] = React.useState<null | string>(null) // userid
@@ -49,20 +85,32 @@ export default function UsersTable() {
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch("/api/user-profiles", { cache: "no-store" })
-      const json: ApiResponse<UserProfile[]> = await res.json()
+  const params = new URLSearchParams({
+        page: String(page),
+        pageSize: String(pageSize),
+        excludeRole: "1",
+      })
+  if (q.trim()) params.set("q", q.trim())
+      const res = await fetch(`/api/user-profiles?${params.toString()}`, { cache: "no-store" })
+      const json = await res.json()
       if (!res.ok) throw new Error(json.error || "Failed to load users")
       setRows(json.data ?? [])
+      setTotal(json.total ?? 0)
     } catch (e: any) {
       setError(e.message)
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [page, pageSize, q])
 
   React.useEffect(() => {
     fetchRows()
   }, [fetchRows])
+
+  const visibleRows = React.useMemo(() => {
+    if (!rows) return [] as UserProfile[]
+    return rows
+  }, [rows])
 
   async function handleCreate(e: React.FormEvent) {
     e.preventDefault()
@@ -144,23 +192,45 @@ export default function UsersTable() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">User Profiles</h2>
-        <div className="flex items-center gap-2">
-          <button
-            onClick={fetchRows}
-            className="text-sm px-3 py-1.5 rounded-md border hover:bg-gray-50"
-          >
-            Refresh
-          </button>
-          <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-            <DialogTrigger asChild>
-              <button className="bg-black text-white text-sm px-3 py-1.5 rounded-md hover:bg-black/90">
-                New User
-              </button>
-            </DialogTrigger>
-            <DialogContent>
+    <div className="rounded-xl border shadow-sm overflow-hidden bg-white">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 border-b bg-gradient-to-r from-emerald-50 to-emerald-100">
+        <div className="space-y-0.5">
+          <h2 className="text-base font-semibold text-emerald-900">User Profiles</h2>
+          <p className="text-xs text-emerald-700">{total} pengguna aktif terdaftar</p>
+        </div>
+        <span className="text-xs px-2 py-1 rounded-full bg-emerald-200 text-emerald-800">{total} Active</span>
+      </div>
+
+      {/* Toolbar */}
+      <div className="px-4 pt-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[260px] max-w-[360px]">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
+            <input
+              value={q}
+              onChange={(e) => { setPage(1); setQ(e.target.value) }}
+              placeholder="Search by name, email, role, id…"
+              className="w-full text-sm pl-8 pr-3 py-2 rounded-md border focus:outline-none focus:ring-2 focus:ring-emerald-500/30"
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={fetchRows}
+              title="Refresh"
+              className="inline-flex items-center gap-1 text-sm px-3 py-2 rounded-md border hover:bg-gray-50"
+            >
+              <RefreshCcw className="h-4 w-4" />
+              <span className="hidden sm:inline">Refresh</span>
+            </button>
+            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+              <DialogTrigger asChild>
+                <button className="inline-flex items-center gap-1 bg-emerald-600 text-white text-sm px-3 py-2 rounded-md hover:bg-emerald-700">
+                  <UserPlus className="h-4 w-4" />
+                  <span>New User</span>
+                </button>
+              </DialogTrigger>
+              <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create User</DialogTitle>
               </DialogHeader>
@@ -223,23 +293,24 @@ export default function UsersTable() {
                   <button type="submit" className="bg-black text-white px-3 py-2 rounded-md text-sm hover:bg-black/90">Create</button>
                 </DialogFooter>
               </form>
-            </DialogContent>
-          </Dialog>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
+        {error && (
+          <div className="mt-3 text-sm text-red-600">{error}</div>
+        )}
       </div>
-      {error && (
-        <div className="text-sm text-red-600">{error}</div>
-      )}
 
       {/* Table */}
-      <div className="overflow-x-auto rounded-lg border">
+      <div className="m-4 overflow-x-auto rounded-lg border">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-gray-600">
             <tr>
               <th className="px-3 py-2 text-left">User ID</th>
               <th className="px-3 py-2 text-left">Username</th>
               <th className="px-3 py-2 text-left">Email</th>
-              <th className="px-3 py-2 text-left">Role ID</th>
+              <th className="px-3 py-2 text-left">Role</th>
               <th className="px-3 py-2 text-left">Kelas</th>
               <th className="px-3 py-2 text-right">Actions</th>
             </tr>
@@ -250,25 +321,28 @@ export default function UsersTable() {
                 <td className="px-3 py-3" colSpan={6}>Loading…</td>
               </tr>
             )}
-            {!loading && rows && rows.length === 0 && (
+            {!loading && visibleRows.length === 0 && (
               <tr>
                 <td className="px-3 py-3" colSpan={6}>No users</td>
               </tr>
             )}
-            {!loading && rows && rows.map((r) => (
+            {!loading && visibleRows.map((r) => (
               <tr key={r.userid} className="border-t">
                 <td className="px-3 py-2 align-top">
                   <div className="font-mono" title={r.userid}>{truncateId(r.userid)}</div>
                 </td>
                 <td className="px-3 py-2 align-top">{r.username}</td>
                 <td className="px-3 py-2 align-top">{r.email ?? ""}</td>
-                <td className="px-3 py-2 align-top">{r.roleid ?? ""}</td>
-                <td className="px-3 py-2 align-top">{r.kelas ?? ""}</td>
+                <td className="px-3 py-2 align-top">{roleBadge(roleName(r.roleid))}</td>
+                <td className="px-3 py-2 align-top">{r.kelas ?? "-"}</td>
                 <td className="px-3 py-2 align-top text-right">
                   <div className="inline-flex gap-2">
                     <Dialog open={editOpen === r.userid} onOpenChange={(o) => setEditOpen(o ? r.userid : null)}>
                       <DialogTrigger asChild>
-                        <button className="text-blue-600 hover:text-blue-700 px-2 py-1 text-sm">Edit</button>
+                        <button className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 px-2 py-1 text-sm">
+                          <Pencil className="h-4 w-4" />
+                          <span className="hidden sm:inline">Edit</span>
+                        </button>
                       </DialogTrigger>
                       <DialogContent>
                         <DialogHeader>
@@ -315,9 +389,10 @@ export default function UsersTable() {
                     </Dialog>
                     <button
                       onClick={() => handleDelete(r.userid)}
-                      className="text-red-600 hover:text-red-700 px-2 py-1 text-sm"
+                      className="inline-flex items-center gap-1 text-red-600 hover:text-red-700 px-2 py-1 text-sm"
                     >
-                      Delete
+                      <Trash2 className="h-4 w-4" />
+                      <span className="hidden sm:inline">Delete</span>
                     </button>
                   </div>
                 </td>
@@ -325,6 +400,33 @@ export default function UsersTable() {
             ))}
           </tbody>
         </table>
+      </div>
+      {/* Pagination controls */}
+      <div className="px-4 pb-4 flex items-center justify-between text-sm">
+        <div className="text-gray-600">
+          Page {page} of {Math.max(1, Math.ceil(total / pageSize))} • Total {total}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            className="px-2 py-1.5 border rounded-md bg-white disabled:opacity-50"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1 || loading}
+          >Prev</button>
+          <button
+            className="px-2 py-1.5 border rounded-md bg-white disabled:opacity-50"
+            onClick={() => setPage((p) => (p * pageSize < total ? p + 1 : p))}
+            disabled={loading || page * pageSize >= total}
+          >Next</button>
+          <select
+            className="ml-2 border rounded-md px-2 py-1.5 bg-white"
+            value={pageSize}
+            onChange={(e) => { setPage(1); setPageSize(Number(e.target.value)) }}
+          >
+            {[10, 20, 50, 100].map((n) => (
+              <option key={n} value={n}>{n}/page</option>
+            ))}
+          </select>
+        </div>
       </div>
     </div>
   )
