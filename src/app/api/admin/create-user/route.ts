@@ -16,7 +16,8 @@ export async function POST(req: Request) {
     const email = (body.email || "").trim()
     const password = String(body.password || "")
     const username = (body.username || email.split("@")[0] || "user").trim()
-    const roleid = typeof body.roleid === "number" ? body.roleid : 1
+  // coerce roleid, fallback to 1 (unknown)
+  const roleid = Number.isFinite(Number(body.roleid)) ? Number(body.roleid) : 1
     const kelas = (body.kelas ?? null) as string | null
 
     if (!email || !password) {
@@ -67,11 +68,12 @@ export async function POST(req: Request) {
     }
 
     // Use service role to create auth user
-  const { data: createdUser, error: signUpError } = await admin.auth.admin.createUser({
+    // IMPORTANT: pass role metadata so trigger can respect it
+    const { data: createdUser, error: signUpError } = await admin.auth.admin.createUser({
       email,
       password,
       email_confirm: true,
-      user_metadata: { username },
+      user_metadata: { username, roleid, kelas },
     })
     if (signUpError) {
       return NextResponse.json({ error: signUpError.message }, { status: 400 })
@@ -82,10 +84,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Failed to get created user id" }, { status: 500 })
     }
 
-    // Create user_profiles row
-  const { data: profileRow, error: insertError } = await admin
+    // Ensure user_profiles row reflects requested role.
+    // If a trigger already inserted with roleid=1, this upsert will correct it.
+    const { data: profileRow, error: insertError } = await admin
       .from("user_profiles")
-      .insert({ userid: newUserId, username, email, roleid, kelas })
+      .upsert(
+        { userid: newUserId, username, email, roleid, kelas },
+        { onConflict: "userid" }
+      )
       .select("userid, username, email, roleid, kelas, created_at, updated_at")
       .single()
 

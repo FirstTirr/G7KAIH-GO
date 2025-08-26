@@ -152,7 +152,6 @@ export default function UsersTable() {
 
   async function handleUpdate(userid: string, patch: Partial<UserProfile>) {
     setError(null)
-    // optimistic
     setRows((prev) =>
       prev?.map((r) => (r.userid === userid ? { ...r, ...patch } : r)) || prev
     )
@@ -164,14 +163,12 @@ export default function UsersTable() {
       })
   const json: ApiResponse<UserProfile> = await res.json()
       if (!res.ok) throw new Error(json.error || "Failed to update user")
-      // sync with server copy
       setRows((prev) =>
         prev?.map((r) => (r.userid === userid ? { ...r, ...json.data! } : r)) || prev
       )
   setEditOpen(null)
     } catch (e: any) {
       setError(e.message)
-      // rollback by refetch
       fetchRows()
     }
   }
@@ -401,7 +398,6 @@ export default function UsersTable() {
           </tbody>
         </table>
       </div>
-      {/* Pagination controls */}
       <div className="px-4 pb-4 flex items-center justify-between text-sm">
         <div className="text-gray-600">
           Page {page} of {Math.max(1, Math.ceil(total / pageSize))} • Total {total}
