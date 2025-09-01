@@ -4,11 +4,41 @@ import { NextRequest, NextResponse } from "next/server"
 export async function GET() {
   try {
     const supabase = await createClient()
-    const { data, error } = await supabase
+    const { data: cats, error: catErr } = await supabase
       .from("category")
       .select("categoryid, categoryname")
       .order("categoryname", { ascending: true })
-    if (error) throw error
+    if (catErr) throw catErr
+
+    if (!cats || cats.length === 0) return NextResponse.json({ data: [] })
+
+    const ids = cats.map((c: any) => c.categoryid)
+    const { data: fields, error: fldErr } = await supabase
+      .from("category_fields")
+      .select("categoryid, field_key, label, type, required, order_index, config")
+      .in("categoryid", ids)
+    if (fldErr) throw fldErr
+
+    const byCat = new Map<string, any[]>()
+    for (const f of fields || []) {
+      const arr = byCat.get(f.categoryid) || []
+      arr.push({
+        key: f.field_key,
+        label: f.label,
+        type: f.type,
+        required: !!f.required,
+        order: typeof f.order_index === "number" ? f.order_index : 0,
+        config: f.config && typeof f.config === "object" ? f.config : undefined,
+      })
+      byCat.set(f.categoryid, arr)
+    }
+
+    const data = cats.map((c: any) => ({
+      categoryid: c.categoryid,
+      categoryname: c.categoryname,
+      inputs: (byCat.get(c.categoryid) || []).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)),
+    }))
+
     return NextResponse.json({ data })
   } catch (err: any) {
     return NextResponse.json(
@@ -20,8 +50,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { categoryname } = (await request.json()) as {
+    const { categoryname, inputs } = (await request.json()) as {
       categoryname?: string
+      inputs?: any
     }
     if (!categoryname || !categoryname.trim()) {
       return NextResponse.json(
@@ -31,8 +62,8 @@ export async function POST(request: NextRequest) {
     }
 
     const supabase = await createClient()
-    // Check duplicate by exact name to avoid spam inserts
     const name = categoryname.trim()
+    // Check duplicate by exact name
     const { data: existsData, error: existsErr } = await supabase
       .from("category")
       .select("categoryid")
@@ -42,12 +73,42 @@ export async function POST(request: NextRequest) {
     if (Array.isArray(existsData) && existsData.length > 0) {
       return NextResponse.json({ error: "Kategori sudah ada" }, { status: 409 })
     }
-    const { data, error } = await supabase
+    // optional inputs validation
+    let cleanInputs: any[] = []
+    if (typeof inputs !== "undefined") {
+      const { validateCategoryInputs } = await import("@/utils/lib/category-inputs")
+      const res = validateCategoryInputs(inputs)
+      if (!res.ok) {
+        return NextResponse.json({ error: res.error }, { status: 400 })
+      }
+      cleanInputs = res.value || []
+    }
+
+    // Insert category
+    const { data: cat, error: catErr } = await supabase
       .from("category")
       .insert({ categoryname: name })
       .select("categoryid, categoryname")
       .single()
-    if (error) throw error
+    if (catErr) throw catErr
+
+    // Insert fields if any
+    if (cleanInputs.length > 0) {
+      const rows = cleanInputs.map((f: any) => ({
+        categoryid: cat.categoryid,
+        field_key: f.key,
+        label: f.label,
+        type: f.type,
+        required: !!f.required,
+        order_index: typeof f.order === "number" ? f.order : 0,
+        config: f.config ?? {},
+      }))
+      const { error: cfErr } = await supabase.from("category_fields").insert(rows)
+      if (cfErr) throw cfErr
+    }
+
+    // Return with mapped inputs
+    const data = { ...cat, inputs: cleanInputs }
     return NextResponse.json({ data })
   } catch (err: any) {
     return NextResponse.json(
