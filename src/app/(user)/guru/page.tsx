@@ -1,9 +1,8 @@
 
 "use client"
 
-import * as React from "react"
-import { useRouter } from "next/navigation"
 import { TeacherDashboard } from "@/components/teacher/TeacherDashboard"
+import { useRouter } from "next/navigation"
 
 export default function Page() {
   const router = useRouter()

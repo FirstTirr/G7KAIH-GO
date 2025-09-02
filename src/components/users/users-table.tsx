@@ -1,15 +1,15 @@
 "use client"
 
 import {
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
+    Dialog,
+    DialogClose,
+    DialogContent,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
 } from "@/components/ui/dialog"
-import { Pencil, RefreshCcw, Search, Trash2, UserPlus } from "lucide-react"
+import { GitMerge, Pencil, RefreshCcw, Search, Trash2, UserPlus } from "lucide-react"
 import React from "react"
 
 type UserProfile = {
@@ -73,6 +73,9 @@ export default function UsersTable() {
 
   const [createOpen, setCreateOpen] = React.useState(false)
   const [editOpen, setEditOpen] = React.useState<null | string>(null) // userid
+  const [mergeOpen, setMergeOpen] = React.useState<null | string>(null) // fromUserid
+  const [mergeTarget, setMergeTarget] = React.useState<string>("")
+  const [mergePreferSourceName, setMergePreferSourceName] = React.useState<boolean>(true)
   const [form, setForm] = React.useState<{
     username: string
     email: string
@@ -188,6 +191,34 @@ export default function UsersTable() {
     }
   }
 
+  async function handleMerge(fromUserid: string) {
+    setError(null)
+    try {
+      if (!mergeTarget || mergeTarget === fromUserid) {
+        throw new Error("Target userid harus diisi dan berbeda")
+      }
+      const res = await fetch("/api/admin/merge-users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fromUserid, toUserid: mergeTarget, preferSourceName: mergePreferSourceName }),
+      })
+      const json: ApiResponse<any> = await res.json()
+      if (!res.ok) {
+        if (res.status === 401) throw new Error("Unauthorized: login dulu sebagai admin")
+        if (res.status === 403) throw new Error("Forbidden: hanya admin yang bisa merge")
+        throw new Error(json.error || "Gagal merge user")
+      }
+      // Optimistic: remove source row and refresh
+      setRows((cur) => cur?.filter((r) => r.userid !== fromUserid) || null)
+  setMergeOpen(null)
+  setMergeTarget("")
+  setMergePreferSourceName(true)
+      fetchRows()
+    } catch (e: any) {
+      setError(e.message)
+    }
+  }
+
   return (
     <div className="rounded-xl border shadow-sm overflow-hidden bg-white">
       {/* Header */}
@@ -220,6 +251,28 @@ export default function UsersTable() {
               <RefreshCcw className="h-4 w-4" />
               <span className="hidden sm:inline">Refresh</span>
             </button>
+            <button
+              onClick={async () => {
+                setError(null)
+                try {
+                  const res = await fetch('/api/admin/auto-merge', { method: 'POST' })
+                  const json = await res.json()
+                  if (!res.ok) {
+                    if (res.status === 401) throw new Error('Unauthorized: login dulu sebagai admin')
+                    if (res.status === 403) throw new Error('Forbidden: hanya admin yang bisa auto-merge')
+                    throw new Error(json.error || 'Gagal auto-merge')
+                  }
+                  await fetchRows()
+                } catch (e: any) {
+                  setError(e.message)
+                }
+              }}
+              title="Auto merge duplikat (username/email)"
+              className="inline-flex items-center gap-1 text-sm px-3 py-2 rounded-md border hover:bg-gray-50"
+            >
+              <GitMerge className="h-4 w-4" />
+              <span className="hidden sm:inline">Auto Merge</span>
+            </button>
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
                 <button className="inline-flex items-center gap-1 bg-emerald-600 text-white text-sm px-3 py-2 rounded-md hover:bg-emerald-700">
@@ -250,7 +303,7 @@ export default function UsersTable() {
                     onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
                     placeholder="email@example.com"
                     className="border rounded-md px-3 py-2"
-                  />
+                  /> 
                 </label>
                 <label className="grid gap-1 text-sm">
                   <span>Role ID</span>
@@ -334,6 +387,52 @@ export default function UsersTable() {
                 <td className="px-3 py-2 align-top">{r.kelas ?? "-"}</td>
                 <td className="px-3 py-2 align-top text-right">
                   <div className="inline-flex gap-2">
+                    <Dialog open={mergeOpen === r.userid} onOpenChange={(o) => { setMergeOpen(o ? r.userid : null); setMergeTarget(""); setMergePreferSourceName(true) }}>
+                      <DialogTrigger asChild>
+                        <button className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-800 px-2 py-1 text-sm" title="Merge into target user">
+                          <GitMerge className="h-4 w-4" />
+                          <span className="hidden sm:inline">Merge</span>
+                        </button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Merge Pengguna</DialogTitle>
+                        </DialogHeader>
+                        <form
+                          onSubmit={(e) => { e.preventDefault(); handleMerge(r.userid) }}
+                          className="grid gap-3"
+                        >
+                          <p className="text-sm text-gray-600">Gabungkan data dari
+                            <span className="font-mono"> {truncateId(r.userid)} </span>
+                            ke userid tujuan berikut. Semua aktivitas akan dipindahkan ke userid tujuan. Profil sumber akan dihapus.
+                          </p>
+                          <div className="grid gap-1 text-sm">
+                            <span>Target User ID</span>
+                            <input
+                              value={mergeTarget}
+                              onChange={(e) => setMergeTarget(e.target.value)}
+                              placeholder="contoh: eca885ad-…"
+                              className="border rounded-md px-3 py-2 font-mono"
+                              required
+                            />
+                          </div>
+                          <label className="flex items-center gap-2 text-sm">
+                            <input
+                              type="checkbox"
+                              checked={mergePreferSourceName}
+                              onChange={(e) => setMergePreferSourceName(e.target.checked)}
+                            />
+                            <span>Utamakan nama dari sumber (mis. "Raditya Alfarisi")</span>
+                          </label>
+                          <DialogFooter>
+                            <DialogClose asChild>
+                              <button type="button" className="px-3 py-2 rounded-md border text-sm">Cancel</button>
+                            </DialogClose>
+                            <button type="submit" className="bg-emerald-600 text-white px-3 py-2 rounded-md text-sm hover:bg-emerald-700">Merge</button>
+                          </DialogFooter>
+                        </form>
+                      </DialogContent>
+                    </Dialog>
                     <Dialog open={editOpen === r.userid} onOpenChange={(o) => setEditOpen(o ? r.userid : null)}>
                       <DialogTrigger asChild>
                         <button className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 px-2 py-1 text-sm">

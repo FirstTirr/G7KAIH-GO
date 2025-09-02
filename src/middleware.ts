@@ -64,38 +64,10 @@ export async function middleware(request: NextRequest) {
       const roleName = roleData?.rolename
 
       // Route protection based on role
-      if (pathname.startsWith('/dashboard') && roleName !== 'admin') {
+  if (pathname.startsWith('/dashboard') && roleName !== 'admin' && roleName !== 'teacher') {
         // Redirect to appropriate role page instead of unknown
         switch (roleName) {
           case 'teacher':
-            return NextResponse.redirect(new URL('/guru', request.url))
-          case 'student':
-            return NextResponse.redirect(new URL('/siswa', request.url))
-          case 'parent':
-            return NextResponse.redirect(new URL('/orangtua', request.url))
-          default:
-            return NextResponse.redirect(new URL('/unknown', request.url))
-        }
-      }
-      
-      if (pathname.startsWith('/siswa') && roleName !== 'student') {
-        // Redirect to appropriate role page instead of unknown
-        switch (roleName) {
-          case 'admin':
-            return NextResponse.redirect(new URL('/dashboard', request.url))
-          case 'teacher':
-            return NextResponse.redirect(new URL('/guru', request.url))
-          case 'parent':
-            return NextResponse.redirect(new URL('/orangtua', request.url))
-          default:
-            return NextResponse.redirect(new URL('/unknown', request.url))
-        }
-      }
-      
-      if (pathname.startsWith('/guru') && roleName !== 'teacher') {
-        // Redirect to appropriate role page instead of unknown
-        switch (roleName) {
-          case 'admin':
             return NextResponse.redirect(new URL('/dashboard', request.url))
           case 'student':
             return NextResponse.redirect(new URL('/siswa', request.url))
@@ -105,6 +77,22 @@ export async function middleware(request: NextRequest) {
             return NextResponse.redirect(new URL('/unknown', request.url))
         }
       }
+      
+  if (pathname.startsWith('/siswa') && roleName !== 'student') {
+        // Redirect to appropriate role page instead of unknown
+        switch (roleName) {
+          case 'admin':
+            return NextResponse.redirect(new URL('/dashboard', request.url))
+          case 'teacher':
+            return NextResponse.redirect(new URL('/dashboard', request.url))
+          case 'parent':
+            return NextResponse.redirect(new URL('/orangtua', request.url))
+          default:
+            return NextResponse.redirect(new URL('/unknown', request.url))
+        }
+      }
+      
+  // removed /guru route guard
       
       if (pathname.startsWith('/orangtua') && roleName !== 'parent') {
         // Redirect to appropriate role page instead of unknown
@@ -112,7 +100,7 @@ export async function middleware(request: NextRequest) {
           case 'admin':
             return NextResponse.redirect(new URL('/dashboard', request.url))
           case 'teacher':
-            return NextResponse.redirect(new URL('/guru', request.url))
+            return NextResponse.redirect(new URL('/dashboard', request.url))
           case 'student':
             return NextResponse.redirect(new URL('/siswa', request.url))
           default:
@@ -133,7 +121,7 @@ export async function middleware(request: NextRequest) {
           case 'student':
             return NextResponse.redirect(new URL('/siswa', request.url))
           case 'teacher':
-            return NextResponse.redirect(new URL('/guru', request.url))
+            return NextResponse.redirect(new URL('/dashboard', request.url))
           case 'parent':
             return NextResponse.redirect(new URL('/orangtua', request.url))
           case 'unknown':

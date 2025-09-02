@@ -1,18 +1,17 @@
 "use client"
 
-import * as React from "react"
 import {
-  Sidebar,
-  SidebarContent,
-  SidebarGroup,
-  SidebarGroupLabel,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarRail,
+    Sidebar,
+    SidebarContent,
+    SidebarGroup,
+    SidebarGroupLabel,
+    SidebarHeader,
+    SidebarMenu,
+    SidebarMenuButton,
+    SidebarMenuItem,
+    SidebarRail,
 } from "@/components/ui/sidebar"
-import { LayoutDashboard, Users, Calendar, BarChart3, FileText } from "lucide-react"
+import { BarChart3, Calendar, FileText, LayoutDashboard, Users } from "lucide-react"
 
 export function TeacherSidebar({
   activeView,
@@ -33,7 +32,7 @@ export function TeacherSidebar({
     <Sidebar collapsible="icon" className="border-r bg-white">
       <SidebarHeader>
         <SidebarGroup>
-          <SidebarGroupLabel>Guru</SidebarGroupLabel>
+          <SidebarGroupLabel>Panel</SidebarGroupLabel>
         </SidebarGroup>
       </SidebarHeader>
       <SidebarContent>

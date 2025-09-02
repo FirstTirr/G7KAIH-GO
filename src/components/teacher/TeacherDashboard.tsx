@@ -1,15 +1,15 @@
 "use client"
 
-import * as React from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { ArrowLeft, Search, User, Calendar, Trophy, Clock } from "lucide-react"
-import { Input } from "@/components/ui/input"
 import { StudentCalendar } from "@/components/teacher/StudentCalendar"
 import { TeacherSidebar } from "@/components/teacher/TeacherSidebar"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { ArrowLeft, Calendar, Search, Trophy, User } from "lucide-react"
+import * as React from "react"
 
 type Student = {
   id: string
@@ -17,7 +17,6 @@ type Student = {
   class: string
   avatar?: string
   activitiesCount: number
-  completionRate: number
   lastActivity: string
   status: "active" | "inactive" | "completed"
 }
@@ -35,6 +34,7 @@ type Activity = {
 async function fetchStudents(): Promise<Student[]> {
   const res = await fetch("/api/teacher/students", { cache: "no-store" })
   const json = await res.json()
+  console.log("Fetched students data:", json.data) // Debug log
   return json.data ?? []
 }
 
@@ -121,7 +121,7 @@ export function TeacherDashboard({ onBack }: { onBack: () => void }) {
 
   const renderStudentsList = () => (
     <>
-  <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <Card>
           <CardContent className="flex items-center p-6">
             <div className="flex items-center">
@@ -168,26 +168,7 @@ export function TeacherDashboard({ onBack }: { onBack: () => void }) {
             </div>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="flex items-center p-6">
-            <div className="flex items-center">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <Clock className="h-6 w-6 text-orange-600" />
-              </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Rata-rata Penyelesaian</p>
-                <p className="text-2xl font-bold text-gray-900">{
-                  students.length > 0
-                    ? Math.round(
-                        students.reduce((acc, s) => acc + s.completionRate, 0) /
-                          students.length
-                      )
-                    : 0
-                }%</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        
       </div>
 
       <div>
@@ -229,18 +210,8 @@ export function TeacherDashboard({ onBack }: { onBack: () => void }) {
                     <span className="font-semibold">{student.activitiesCount}</span>
                   </div>
                   <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Tingkat Penyelesaian</span>
-                    <span className="font-semibold text-green-600">{student.completionRate}%</span>
-                  </div>
-                  <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Aktivitas Terakhir</span>
                     <span className="text-sm text-gray-500">{student.lastActivity || "-"}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-gradient-to-r from-blue-500 to-green-500 h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${student.completionRate}%` }}
-                    />
                   </div>
                 </div>
                 <Button
@@ -287,7 +258,7 @@ export function TeacherDashboard({ onBack }: { onBack: () => void }) {
                     <ArrowLeft className="h-4 w-4" /> Kembali ke Home
                   </Button>
                   <div>
-                    <h1 className="text-xl font-semibold text-gray-900">Dashboard Guru</h1>
+                    <h1 className="text-xl font-semibold text-gray-900">Panel Aktivitas</h1>
                     <p className="text-sm text-gray-500">Pantau aktivitas siswa</p>
                   </div>
                 </div>

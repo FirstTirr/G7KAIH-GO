@@ -1,11 +1,11 @@
 "use client"
 
-import * as React from "react"
-import { ArrowLeft, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, Star } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { ArrowLeft, Calendar as CalendarIcon, ChevronLeft, ChevronRight, Clock, Star } from "lucide-react"
+import * as React from "react"
 
 type Student = {
   id: string
@@ -16,12 +16,13 @@ type Student = {
 
 type Activity = {
   id: string
-  title: string
-  type: "habit" | "task" | "achievement"
-  status: "completed" | "pending" | "missed"
-  time: string
+  title: string // now category name
+  type: "category" | "habit" | "task" | "achievement"
+  status?: "completed" | "pending" | "missed" // optional for category summary
+  time: string // last time in the day
   description?: string
-  points?: number
+  points?: number // aggregated points for that category on that day
+  count?: number // number of activities in that category that day
 }
 
 export function StudentCalendar({
@@ -72,7 +73,7 @@ export function StudentCalendar({
     setLoading(true)
     setError(null)
     try {
-      const res = await fetch(`/api/teacher/students/${student.id}/activities?month=latest`, { cache: "no-store" })
+  const res = await fetch(`/api/teacher/students/${student.id}/activities?month=latest&expandOptions=true&includeAliases=true`, { cache: "no-store" })
       const json = await res.json()
       if (!res.ok) throw new Error(json?.error || "Gagal memuat aktivitas")
       setActivitiesByDate(json.data || {})
@@ -103,7 +104,6 @@ export function StudentCalendar({
   const selectedActivities = activitiesByDate[selectedDate] ?? []
   const totalPoints = Object.values(activitiesByDate)
     .flat()
-    .filter((a) => a.status === "completed")
     .reduce((sum, a) => sum + (a.points || 0), 0)
 
   // Fetch activities when month or student changes
@@ -114,7 +114,7 @@ export function StudentCalendar({
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`/api/teacher/students/${student.id}/activities?month=latest`, { cache: "no-store" })
+  const res = await fetch(`/api/teacher/students/${student.id}/activities?month=latest&expandOptions=true&includeAliases=true`, { cache: "no-store" })
         const json = await res.json()
         if (res.ok && mounted) {
           setActivitiesByDate(json.data || {})
@@ -152,7 +152,7 @@ export function StudentCalendar({
       setLoading(true)
       setError(null)
       try {
-        const res = await fetch(`/api/teacher/students/${student.id}/activities?month=${month}`, {
+  const res = await fetch(`/api/teacher/students/${student.id}/activities?month=${month}&expandOptions=true&includeAliases=true`, {
           cache: "no-store",
         })
         const json = await res.json()
@@ -207,12 +207,14 @@ export function StudentCalendar({
               </div>
             </div>
           </div>
-          <Card className="px-4 py-2">
-            <div className="flex items-center gap-2">
-              <Star className="h-5 w-5 text-yellow-500" />
-              <span className="font-semibold text-lg">{totalPoints} Poin</span>
-            </div>
-          </Card>
+          {totalPoints > 0 && (
+            <Card className="px-4 py-2">
+              <div className="flex items-center gap-2">
+                <Star className="h-5 w-5 text-yellow-500" />
+                <span className="font-semibold text-lg">{totalPoints} Poin</span>
+              </div>
+            </Card>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -261,6 +263,7 @@ export function StudentCalendar({
                   const day = i - firstDayOfMonth + 1
                   const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`
                   const list = activitiesByDate[dateStr] || []
+                  const listCount = list.reduce((n, a) => n + (a.count ?? 1), 0)
                   const isSelected = selectedDate === dateStr
                   const isToday = dateStr === todayStr
                   const isWeekend = i % 7 === 0 || i % 7 === 6
@@ -277,14 +280,14 @@ export function StudentCalendar({
                         <span className={`font-semibold text-sm ${
                           isSelected ? "text-blue-600" : isToday ? "text-orange-600" : isWeekend ? "text-red-600" : "text-gray-900"
                         }`}>{day}</span>
-                        {list.length > 0 && (
+                        {listCount > 0 && (
                           <div className={`${
-                            list.length >= 3
+                            listCount >= 3
                               ? "bg-green-500 text-white"
-                              : list.length >= 2
+                              : listCount >= 2
                               ? "bg-yellow-500 text-white"
                               : "bg-blue-500 text-white"
-                          } w-5 h-5 rounded-full text-xs font-medium flex items-center justify-center`}>{list.length}</div>
+                          } w-5 h-5 rounded-full text-xs font-medium flex items-center justify-center`}>{listCount}</div>
                         )}
                       </div>
                       <div className="space-y-1 overflow-hidden">
@@ -292,13 +295,15 @@ export function StudentCalendar({
                           <div
                             key={a.id}
                             className={`${
-                              a.type === "habit"
+                              a.type === "category"
+                                ? "bg-blue-100 text-blue-700 border border-blue-200"
+                                : a.type === "habit"
                                 ? "bg-green-100 text-green-700 border border-green-200"
                                 : "bg-purple-100 text-purple-700 border border-purple-200"
                             } text-xs px-2 py-1 rounded-md truncate font-medium`}
-                            title={`${a.title} - ${a.time} (+${a.points ?? 0} poin)`}
+                            title={`${a.title}${a.count ? ` (${a.count}x)` : ""} - ${a.time} (+${a.points ?? 0} poin)`}
                           >
-                            {a.title}
+                            {a.title}{a.count ? ` (${a.count}x)` : ""}
                           </div>
                         ))}
                         {list.length > 2 && (
@@ -321,7 +326,7 @@ export function StudentCalendar({
                   <CalendarIcon className="h-5 w-5" /> Aktivitas {new Date(selectedDate).toLocaleDateString("id-ID", { day: "numeric", month: "long" })}
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
                 {loading ? (
                   <p className="text-gray-500 text-center py-4">Memuat aktivitas…</p>
                 ) : error ? (
@@ -334,10 +339,10 @@ export function StudentCalendar({
                     <div key={a.id} className="p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-start justify-between mb-2">
                         <h4 className="font-medium text-gray-900">{a.title}</h4>
-                        <Badge>+{a.points ?? 0}</Badge>
+                        {(a.points ?? 0) > 0 && <Badge>+{a.points}</Badge>}
                       </div>
                       <div className="flex items-center gap-2 text-sm text-gray-600 mb-1">
-                        <Clock className="h-3 w-3" /> {a.time}
+                        <Clock className="h-3 w-3" /> {a.time} {a.count ? `• ${a.count} aktivitas` : ""}
                       </div>
                       {a.description && <p className="text-sm text-gray-600">{a.description}</p>}
                     </div>
@@ -362,7 +367,9 @@ export function StudentCalendar({
                   <div className="text-sm text-gray-600">Hari Aktif</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-purple-600">{Object.values(activitiesByDate).flat().length}</div>
+                  <div className="text-2xl font-bold text-purple-600">{
+                    Object.values(activitiesByDate).reduce((sum, arr) => sum + (arr as any[]).reduce((n, a: any) => n + (a.count ?? 1), 0), 0)
+                  }</div>
                   <div className="text-sm text-gray-600">Total Aktivitas</div>
                 </div>
               </CardContent>

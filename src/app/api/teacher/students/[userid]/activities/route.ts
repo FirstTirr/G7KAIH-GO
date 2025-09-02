@@ -1,34 +1,88 @@
 import { createAdminClient } from "@/utils/supabase/admin"
 import { NextResponse, type NextRequest } from "next/server"
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: Promise<{ userid: string }> }
-) {
+// In-memory cache for alias resolution (5 minute TTL)
+const aliasCache = new Map<string, string[]>()
+const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+let cacheCleared = false
+
+// Verified duplicate mappings (manually curated to prevent cross-contamination)
+const VERIFIED_ALIASES = new Map<string, string[]>([
+  // Raditya Alfarisi - verified same person with different userids
+  ['6f07ae03-187e-4e25-a519-9f72f96f22ff', ['6f07ae03-187e-4e25-a519-9f72f96f22ff', 'eca885ad-1119-48ca-8efe-91efcbfb54b4']],
+  ['eca885ad-1119-48ca-8efe-91efcbfb54b4', ['6f07ae03-187e-4e25-a519-9f72f96f22ff', 'eca885ad-1119-48ca-8efe-91efcbfb54b4']]
+])
+
+// Clear contaminated cache entries (one-time fix)
+function clearAliasCache() {
+  if (!cacheCleared) {
+    aliasCache.clear()
+    cacheCleared = true
+    console.log("[activities API] Cleared contaminated alias cache")
+  }
+}
+
+export async function GET(req: NextRequest, { params }: { params: { userid: string } }) {
   try {
+    // Clear contaminated cache on first request after fix
+    clearAliasCache()
+    
     const { userid } = await params
     if (!userid) {
       return NextResponse.json({ error: "userid is required" }, { status: 400 })
     }
-    const url = new URL(request.url)
-    const month = url.searchParams.get("month") // YYYY-MM or "latest"
+  const url = new URL(req.url)
+  const month = url.searchParams.get("month") // YYYY-MM atau "latest"
+  const includeAliases = /^(1|true|yes)$/i.test(url.searchParams.get("includeAliases") || "")
+  const expandOptions = /^(1|true|yes)$/i.test(url.searchParams.get("expandOptions") || "")
 
-  const supabase = await createAdminClient()
+    const supabase = await createAdminClient()
 
-    // Quick debug: check if there are any rows for this userid at all
-    const { count: anyCount, error: anyErr } = await supabase
-      .from("aktivitas")
-      .select("activityid", { count: "exact", head: true })
-      .eq("userid", userid)
-    if (anyErr) throw anyErr
-  console.log("[activities API] userid=", userid, "month=", month, "anyCount=", anyCount)
+  // Check cache first (keyed by includeAliases flag)
+  const cacheKey = `${userid}:${includeAliases ? 1 : 0}`
+  let aliasIds = aliasCache.get(cacheKey)
+    
+    if (!aliasIds) {
+      // Start with the requested userid
+      const set = new Set<string>([userid])
+      // Always include manually verified aliases for safety
+      const verifiedAliases = VERIFIED_ALIASES.get(userid)
+      if (verifiedAliases) for (const id of verifiedAliases) set.add(id)
+
+      // Optionally include peers with exact same email/username (opt-in to avoid contamination)
+      if (includeAliases) {
+        const { data: prof } = await supabase
+          .from("user_profiles")
+          .select("username, email")
+          .eq("userid", userid)
+          .maybeSingle()
+        const conditions: string[] = []
+        if (prof?.username?.trim()) conditions.push(`username.eq.${prof.username.trim()}`)
+        if (prof?.email?.trim()) conditions.push(`email.eq.${prof.email.trim()}`)
+        if (conditions.length > 0) {
+          const { data: peers } = await supabase
+            .from("user_profiles")
+            .select("userid")
+            .or(conditions.join(','))
+          for (const p of peers || []) set.add((p as any).userid)
+        }
+      }
+
+      aliasIds = Array.from(set)
+
+      // Cache for 5 minutes
+      aliasCache.set(cacheKey, aliasIds)
+      setTimeout(() => aliasCache.delete(cacheKey), CACHE_TTL)
+    }
+
+  console.log("[activities API] userid=", userid, "aliasIds=", aliasIds.length)
 
     async function getMonthBounds(target?: string): Promise<{ start: Date; end: Date; monthUsed: string } | null> {
       if (target === "latest") {
         const { data: latest, error: latestErr } = await supabase
           .from("aktivitas")
           .select("created_at")
-          .eq("userid", userid)
+          .in("userid", aliasIds || [userid])
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle()
@@ -61,13 +115,12 @@ export async function GET(
 
     let bounds = await getMonthBounds(month || undefined)
     if (!bounds) {
-      console.log("[activities API] No bounds found for userid=", userid, "month=", month, "anyCount=", anyCount)
+      console.log("[activities API] No bounds found for userid=", userid, "month=", month)
       return NextResponse.json({
         data: {},
         monthUsed: null,
         debug: {
           requestedMonth: month,
-          anyCount,
           userid,
           note: "No aktivitas found for this userid",
         },
@@ -75,10 +128,10 @@ export async function GET(
     }
     let { start, end, monthUsed } = bounds
 
-  const { data: items, error } = await supabase
+    const { data: items, error } = await supabase
       .from("aktivitas")
-      .select("activityid, activityname, activitycontent, status, created_at")
-      .eq("userid", userid)
+      .select("activityid, activityname, activitycontent, status, created_at, categoryid, category:categoryid(categoryid, categoryname)")
+      .in("userid", aliasIds)
       .gte("created_at", start.toISOString())
       .lt("created_at", end.toISOString())
       .order("created_at", { ascending: true })
@@ -96,8 +149,8 @@ export async function GET(
         monthUsed = latestBounds.monthUsed
         const { data: latestItems, error: latestErr } = await supabase
           .from("aktivitas")
-          .select("activityid, activityname, activitycontent, status, created_at")
-          .eq("userid", userid)
+          .select("activityid, activityname, activitycontent, status, created_at, categoryid, category:categoryid(categoryid, categoryname)")
+          .in("userid", aliasIds)
           .gte("created_at", start.toISOString())
           .lt("created_at", end.toISOString())
           .order("created_at", { ascending: true })
@@ -111,8 +164,8 @@ export async function GET(
     if ((result?.length ?? 0) === 0) {
       const { data: recent, error: recentErr } = await supabase
         .from("aktivitas")
-        .select("activityid, activityname, activitycontent, status, created_at")
-        .eq("userid", userid)
+        .select("activityid, activityname, activitycontent, status, created_at, categoryid, category:categoryid(categoryid, categoryname)")
+        .in("userid", aliasIds)
         .order("created_at", { ascending: true })
         .limit(100)
       if (recentErr) throw recentErr
@@ -126,21 +179,213 @@ export async function GET(
       }
     }
 
+    // If some activities have no categoryid, try deriving from field values -> category_fields
+    try {
+      const missingIds = (result || []).filter((r: any) => !r?.categoryid).map((r: any) => r.activityid)
+      if (missingIds.length > 0) {
+        const { data: hints, error: hintsErr } = await supabase
+          .from("aktivitas_field_values")
+          .select(
+            "activityid, category_fields:fieldid(categoryid, category:categoryid(categoryid, categoryname))"
+          )
+          .in("activityid", missingIds)
+
+        if (!hintsErr && hints) {
+          const map = new Map<string, { categoryid?: string; category?: { categoryid: string; categoryname: string } }>()
+          for (const row of hints as any[]) {
+            const aid = row.activityid as string
+            const cf = row?.category_fields
+            const cid = cf?.categoryid
+            const cname = cf?.category?.categoryname
+            if (!aid || !cid) continue
+            if (!map.has(aid)) {
+              map.set(aid, { categoryid: cid, category: { categoryid: cid, categoryname: cname } })
+            }
+          }
+          result = (result || []).map((r: any) =>
+            r?.categoryid
+              ? r
+              : map.has(r.activityid)
+              ? { ...r, categoryid: map.get(r.activityid)!.categoryid, category: map.get(r.activityid)!.category }
+              : r
+          )
+        }
+      }
+    } catch {}
+
+    // Optionally prepare per-activity multiselect options for expansion
+    let optionsByActivity: Map<string, string[]> | null = null
+    // Always prepare per-activity categories derived from field values (so non-multiselect categories show up)
+    let categoriesByActivity: Map<string, { id: string; name: string }[]> | null = null
+    if (expandOptions && (result?.length || 0) > 0) {
+      try {
+        const activityIds = Array.from(new Set((result || []).map((r: any) => r.activityid))).filter(Boolean)
+        if (activityIds.length > 0) {
+          const { data: fv, error: fvErr } = await supabase
+            .from("aktivitas_field_values")
+            .select("activityid, value, category_fields:fieldid(type, categoryid, category:categoryid(categoryid, categoryname))")
+            .in("activityid", activityIds)
+          if (!fvErr && fv) {
+            optionsByActivity = new Map()
+            categoriesByActivity = new Map()
+            for (const row of fv as any[]) {
+              const t = (row?.category_fields?.type || '').toLowerCase()
+              const catId = row?.category_fields?.categoryid as string | undefined
+              const catName = row?.category_fields?.category?.categoryname as string | undefined
+              if (catId && catName) {
+                const list = categoriesByActivity.get(row.activityid) || []
+                if (!list.some((c) => c.id === catId)) {
+                  list.push({ id: catId, name: catName })
+                  categoriesByActivity.set(row.activityid, list)
+                }
+              }
+              if (t !== 'multiselect') continue
+              let vals: string[] = []
+              const v = row?.value
+              if (Array.isArray(v)) {
+                vals = v.map(String)
+              } else if (typeof v === 'string') {
+                try {
+                  const parsed = JSON.parse(v)
+                  if (Array.isArray(parsed)) vals = parsed.map(String)
+                  else vals = String(v).split(',').map(s => s.trim()).filter(Boolean)
+                } catch {
+                  vals = String(v).split(',').map(s => s.trim()).filter(Boolean)
+                }
+              } else if (v && typeof v === 'object') {
+                // Sometimes jsonb comes as object; try common shapes
+                const maybe = (v as any).values || (v as any).options || []
+                if (Array.isArray(maybe)) vals = maybe.map(String)
+              }
+              if (vals.length > 0) {
+                const aid = row.activityid as string
+                const prev = optionsByActivity.get(aid) || []
+                optionsByActivity.set(aid, Array.from(new Set([...prev, ...vals])))
+              }
+            }
+
+            // Fallback: if no categories got populated (nested join may be restricted), build via two-step map
+            const emptyCats = Array.from(categoriesByActivity.values()).every((arr) => (arr?.length || 0) === 0)
+            if (emptyCats) {
+              const fvFlat = (fv as any[]).map(r => ({ activityid: r.activityid as string, fieldid: (r as any).fieldid })).filter(r => r.fieldid)
+              const fieldIds = Array.from(new Set(fvFlat.map(r => r.fieldid)))
+              if (fieldIds.length > 0) {
+                const { data: cf, error: cfErr } = await supabase
+                  .from('category_fields')
+                  .select('fieldid, categoryid, category:categoryid(categoryid, categoryname)')
+                  .in('fieldid', fieldIds)
+                if (!cfErr && cf) {
+                  const f2c = new Map<string, { id: string, name: string }>()
+                  for (const row of cf as any[]) {
+                    const cid = row?.categoryid as string
+                    const cname = row?.category?.categoryname as string
+                    if (row?.fieldid && cid && cname) f2c.set(row.fieldid, { id: cid, name: cname })
+                  }
+                  categoriesByActivity = new Map()
+                  for (const r of fvFlat) {
+                    const cat = f2c.get(r.fieldid)
+                    if (!cat) continue
+                    const list = categoriesByActivity.get(r.activityid) || []
+                    if (!list.some((c) => c.id === cat.id)) list.push(cat)
+                    categoriesByActivity.set(r.activityid, list)
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch {}
+    }
+
+    // Group per-day by category or expanded options; summarize counts and points
     const byDate: Record<string, any[]> = {}
-  for (const a of result) {
-      const d = new Date(a.created_at)
+    for (const a of result) {
+      const d = new Date(a.created_at as string)
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
       const time = `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`
-      const points = a.status === "completed" ? 10 : 0
-      ;(byDate[key] ||= []).push({
-        id: a.activityid,
-        title: a.activityname,
-        type: "habit",
-        status: a.status,
-        time,
-        description: a.activitycontent,
-        points,
-      })
+      const isCompleted = (a as any).status === "completed"
+      const pts = isCompleted ? 10 : 0
+
+      const arr = (byDate[key] ||= [])
+
+      const aid = (a as any).activityid as string
+      const expanded = optionsByActivity && optionsByActivity.get(aid)
+      if (expandOptions && expanded && expanded.length > 0) {
+        for (const opt of expanded) {
+          const optId = `opt::${opt.toLowerCase()}`
+          let entry = arr.find((e: any) => e.id === optId)
+          if (!entry) {
+            entry = {
+              id: optId,
+              title: opt,
+              type: "category",
+              count: 0,
+              time,
+              points: 0, // keep 0 to avoid inflating points when splitting
+            }
+            arr.push(entry)
+          }
+          entry.count += 1
+          entry.time = time
+        }
+        // Also add top-level categories present in this activity's fields
+        const cats = categoriesByActivity?.get(aid) || []
+        for (const c of cats) {
+          let centry = arr.find((e: any) => e.id === c.id)
+          if (!centry) {
+            centry = {
+              id: c.id,
+              title: c.name,
+              type: "category",
+              count: 0,
+              time,
+              points: 0,
+            }
+            arr.push(centry)
+          }
+          centry.count += 1
+          centry.time = time
+        }
+      } else {
+        const catId = (a as any).categoryid || "uncategorized"
+        const catName = (a as any)?.category?.categoryname || "Tanpa Kategori"
+        let entry = arr.find((e: any) => e.id === catId)
+        if (!entry) {
+          entry = {
+            id: catId,
+            title: catName,
+            type: "category",
+            count: 0,
+            time, // last seen time (will update as we iterate chronological)
+            points: 0,
+          }
+          arr.push(entry)
+        }
+        entry.count += 1
+        entry.points += pts
+        entry.time = time
+        // Ensure categories from fields are also represented
+        if (categoriesByActivity) {
+          const cats = categoriesByActivity.get(aid) || []
+          for (const c of cats) {
+            if (c.id === catId) continue
+            let centry = arr.find((e: any) => e.id === c.id)
+            if (!centry) {
+              centry = {
+                id: c.id,
+                title: c.name,
+                type: "category",
+                count: 0,
+                time,
+                points: 0,
+              }
+              arr.push(centry)
+            }
+            centry.count += 1
+            centry.time = time
+          }
+        }
+      }
     }
 
   console.log("[activities API] final grouped days=", Object.keys(byDate).length, "totalItems=", Object.values(byDate).reduce((n, arr) => n + (arr?.length || 0), 0))
@@ -151,8 +396,8 @@ export async function GET(
         requestedMonth: month,
         bounds: { start: start.toISOString(), end: end.toISOString() },
         totalItems: Object.values(byDate).reduce((n, arr) => n + (arr?.length || 0), 0),
-        anyCount,
         userid,
+        aliasIds,
       },
     })
   } catch (err: any) {
