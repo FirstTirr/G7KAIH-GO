@@ -68,7 +68,7 @@ export async function middleware(request: NextRequest) {
         // Redirect to appropriate role page instead of unknown
         switch (roleName) {
           case 'teacher':
-            return NextResponse.redirect(new URL('/dashboard', request.url))
+            return NextResponse.redirect(new URL('/guru', request.url))
           case 'student':
             return NextResponse.redirect(new URL('/siswa', request.url))
           case 'parent':
@@ -84,7 +84,7 @@ export async function middleware(request: NextRequest) {
           case 'admin':
             return NextResponse.redirect(new URL('/dashboard', request.url))
           case 'teacher':
-            return NextResponse.redirect(new URL('/dashboard', request.url))
+            return NextResponse.redirect(new URL('/guru', request.url))
           case 'parent':
             return NextResponse.redirect(new URL('/orangtua', request.url))
           default:
@@ -100,7 +100,7 @@ export async function middleware(request: NextRequest) {
           case 'admin':
             return NextResponse.redirect(new URL('/dashboard', request.url))
           case 'teacher':
-            return NextResponse.redirect(new URL('/dashboard', request.url))
+            return NextResponse.redirect(new URL('/guru', request.url))
           case 'student':
             return NextResponse.redirect(new URL('/siswa', request.url))
           default:
@@ -121,7 +121,7 @@ export async function middleware(request: NextRequest) {
           case 'student':
             return NextResponse.redirect(new URL('/siswa', request.url))
           case 'teacher':
-            return NextResponse.redirect(new URL('/dashboard', request.url))
+            return NextResponse.redirect(new URL('/guru', request.url))
           case 'parent':
             return NextResponse.redirect(new URL('/orangtua', request.url))
           case 'unknown':

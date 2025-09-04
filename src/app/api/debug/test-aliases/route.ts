@@ -4,9 +4,8 @@ import { NextRequest, NextResponse } from "next/server"
 // Verified duplicate mappings (manually curated to prevent cross-contamination)
 const VERIFIED_ALIASES = new Map<string, string[]>([
   // Raditya Alfarisi - verified same person with different userids
-  ['6f07ae03-187e-4e25-a519-9f72f96f22ff', ['6f07ae03-187e-4e25-a519-9f72f96f22ff', 'eca885ad-1119-48ca-8efe-91efcbfb54b4', 'b0f82dcd-9f32-4bb1-ad37-43b18a6d691f']],
-  ['eca885ad-1119-48ca-8efe-91efcbfb54b4', ['6f07ae03-187e-4e25-a519-9f72f96f22ff', 'eca885ad-1119-48ca-8efe-91efcbfb54b4', 'b0f82dcd-9f32-4bb1-ad37-43b18a6d691f']],
-  ['b0f82dcd-9f32-4bb1-ad37-43b18a6d691f', ['6f07ae03-187e-4e25-a519-9f72f96f22ff', 'eca885ad-1119-48ca-8efe-91efcbfb54b4', 'b0f82dcd-9f32-4bb1-ad37-43b18a6d691f']]
+  ['6f07ae03-187e-4e25-a519-9f72f96f22ff', ['6f07ae03-187e-4e25-a519-9f72f96f22ff', 'eca885ad-1119-48ca-8efe-91efcbfb54b4']],
+  ['eca885ad-1119-48ca-8efe-91efcbfb54b4', ['6f07ae03-187e-4e25-a519-9f72f96f22ff', 'eca885ad-1119-48ca-8efe-91efcbfb54b4']]
 ])
 
 export async function GET(req: NextRequest) {

@@ -85,7 +85,7 @@ export async function GET(request: Request) {
             case 'student':
               return NextResponse.redirect(`${origin}/siswa`)
             case 'teacher':
-              return NextResponse.redirect(`${origin}/dashboard`)
+              return NextResponse.redirect(`${origin}/dashboard/teacher`)
             case 'parent':
               return NextResponse.redirect(`${origin}/orangtua`)
             case 'admin':

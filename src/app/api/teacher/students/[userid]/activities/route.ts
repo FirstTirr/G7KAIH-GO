@@ -213,6 +213,28 @@ export async function GET(req: NextRequest, { params }: { params: { userid: stri
       }
     } catch {}
 
+    // Build validation flags aggregated per activity from aktivitas_field_values
+    let validationMap: Map<string, { teacher: boolean; parent: boolean }> = new Map()
+    try {
+      const activityIdsForFlags = Array.from(new Set((result || []).map((r: any) => r.activityid))).filter(Boolean)
+      if (activityIdsForFlags.length > 0) {
+        const { data: vrows } = await supabase
+          .from('aktivitas_field_values')
+          .select('activityid, isValidateByTeacher, isValidateByParent')
+          .in('activityid', activityIdsForFlags)
+        if (vrows) {
+          for (const r of vrows as any[]) {
+            const aid = r.activityid as string
+            const prev = validationMap.get(aid) || { teacher: false, parent: false }
+            validationMap.set(aid, {
+              teacher: prev.teacher || !!r.isValidateByTeacher,
+              parent: prev.parent || !!r.isValidateByParent,
+            })
+          }
+        }
+      }
+    } catch {}
+
     // Optionally prepare per-activity multiselect options for expansion
     let optionsByActivity: Map<string, string[]> | null = null
     // Always prepare per-activity categories derived from field values (so non-multiselect categories show up)
@@ -298,7 +320,7 @@ export async function GET(req: NextRequest, { params }: { params: { userid: stri
     }
 
     // Group per-day by category or expanded options; summarize counts and points
-    const byDate: Record<string, any[]> = {}
+  const byDate: Record<string, any[]> = {}
     for (const a of result) {
       const d = new Date(a.created_at as string)
       const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
@@ -310,7 +332,7 @@ export async function GET(req: NextRequest, { params }: { params: { userid: stri
 
       const aid = (a as any).activityid as string
       const expanded = optionsByActivity && optionsByActivity.get(aid)
-      if (expandOptions && expanded && expanded.length > 0) {
+    if (expandOptions && expanded && expanded.length > 0) {
         for (const opt of expanded) {
           const optId = `opt::${opt.toLowerCase()}`
           let entry = arr.find((e: any) => e.id === optId)
@@ -321,12 +343,19 @@ export async function GET(req: NextRequest, { params }: { params: { userid: stri
               type: "category",
               count: 0,
               time,
-              points: 0, // keep 0 to avoid inflating points when splitting
+        points: 0, // keep 0 to avoid inflating points when splitting
+        activityIds: [] as string[],
+        validatedByTeacher: false,
+        validatedByParent: false,
             }
             arr.push(entry)
           }
           entry.count += 1
           entry.time = time
+          entry.activityIds.push(aid)
+          const flags = validationMap.get(aid)
+          entry.validatedByTeacher = entry.validatedByTeacher || !!flags?.teacher
+          entry.validatedByParent = entry.validatedByParent || !!flags?.parent
         }
         // Also add top-level categories present in this activity's fields
         const cats = categoriesByActivity?.get(aid) || []
@@ -339,12 +368,19 @@ export async function GET(req: NextRequest, { params }: { params: { userid: stri
               type: "category",
               count: 0,
               time,
-              points: 0,
+        points: 0,
+        activityIds: [] as string[],
+        validatedByTeacher: false,
+        validatedByParent: false,
             }
             arr.push(centry)
           }
           centry.count += 1
           centry.time = time
+          centry.activityIds.push(aid)
+          const flags2 = validationMap.get(aid)
+          centry.validatedByTeacher = centry.validatedByTeacher || !!flags2?.teacher
+          centry.validatedByParent = centry.validatedByParent || !!flags2?.parent
         }
       } else {
         const catId = (a as any).categoryid || "uncategorized"
@@ -357,13 +393,20 @@ export async function GET(req: NextRequest, { params }: { params: { userid: stri
             type: "category",
             count: 0,
             time, // last seen time (will update as we iterate chronological)
-            points: 0,
+      points: 0,
+      activityIds: [] as string[],
+      validatedByTeacher: false,
+      validatedByParent: false,
           }
           arr.push(entry)
         }
         entry.count += 1
         entry.points += pts
         entry.time = time
+  entry.activityIds.push(aid)
+  const flags = validationMap.get(aid)
+  entry.validatedByTeacher = entry.validatedByTeacher || !!flags?.teacher
+  entry.validatedByParent = entry.validatedByParent || !!flags?.parent
         // Ensure categories from fields are also represented
         if (categoriesByActivity) {
           const cats = categoriesByActivity.get(aid) || []
@@ -377,12 +420,19 @@ export async function GET(req: NextRequest, { params }: { params: { userid: stri
                 type: "category",
                 count: 0,
                 time,
-                points: 0,
+        points: 0,
+        activityIds: [] as string[],
+        validatedByTeacher: false,
+        validatedByParent: false,
               }
               arr.push(centry)
             }
             centry.count += 1
             centry.time = time
+            centry.activityIds.push(aid)
+            const flags3 = validationMap.get(aid)
+            centry.validatedByTeacher = centry.validatedByTeacher || !!flags3?.teacher
+            centry.validatedByParent = centry.validatedByParent || !!flags3?.parent
           }
         }
       }
@@ -402,5 +452,37 @@ export async function GET(req: NextRequest, { params }: { params: { userid: stri
     })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Unexpected error" }, { status: 500 })
+  }
+}
+
+export async function POST(req: NextRequest, { params }: { params: { userid: string } }) {
+  try {
+    const { userid } = await params
+    const body = await req.json().catch(() => ({})) as {
+      action?: 'validate' | 'invalidate'
+      by?: 'teacher' | 'parent'
+      activityIds?: string[]
+    }
+    const action = body.action === 'invalidate' ? 'invalidate' : 'validate'
+    const by = body.by === 'parent' ? 'parent' : 'teacher'
+    const ids = Array.from(new Set((body.activityIds || []).filter(Boolean)))
+    if (ids.length === 0) {
+      return NextResponse.json({ error: 'activityIds is required' }, { status: 400 })
+    }
+    const column = by === 'parent' ? 'isValidateByParent' : 'isValidateByTeacher'
+    const value = action === 'validate'
+
+    const supabase = await createAdminClient()
+    // Update all field value rows for these activities
+    const { error } = await supabase
+      .from('aktivitas_field_values')
+      .update({ [column]: value })
+      .in('activityid', ids)
+
+    if (error) throw error
+
+    return NextResponse.json({ ok: true, updated: ids.length })
+  } catch (err: any) {
+    return NextResponse.json({ error: err?.message || 'Unexpected error' }, { status: 500 })
   }
 }

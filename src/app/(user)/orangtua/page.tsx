@@ -1,8 +1,8 @@
 
-const page = () => {
-  return (
-    <div>ortu</div>
-  )
-}
+"use client"
 
-export default page
+import { ParentDashboard } from "@/components/orangtua/ParentDashboard"
+
+export default function OrangTuaPage() {
+  return <ParentDashboard />
+}
