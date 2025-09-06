@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     let query = supabase
       .from("user_profiles")
       .select(
-        "userid, username, email, roleid, kelas, created_at, updated_at",
+        "userid, username, email, roleid, kelas, parent_of_userid, created_at, updated_at",
         { count: "exact" }
       )
 

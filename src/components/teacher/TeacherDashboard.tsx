@@ -1,5 +1,6 @@
 "use client"
 
+import { StudentActivityDetails } from "@/components/teacher/StudentActivityDetails"
 import { StudentCalendar } from "@/components/teacher/StudentCalendar"
 import { TeacherSidebar } from "@/components/teacher/TeacherSidebar"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -40,11 +41,14 @@ async function fetchStudents(): Promise<Student[]> {
 
 export function TeacherDashboard({ onBack }: { onBack: () => void }) {
   const [selectedStudent, setSelectedStudent] = React.useState<Student | null>(null)
+  const [viewMode, setViewMode] = React.useState<"calendar" | "details">("calendar")
   const [searchTerm, setSearchTerm] = React.useState("")
   const [activeView, setActiveView] = React.useState("students")
   const [students, setStudents] = React.useState<Student[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
+  const [studentActivities, setStudentActivities] = React.useState<any[]>([])
+  const [detailsLoading, setDetailsLoading] = React.useState(false)
 
   React.useEffect(() => {
     let mounted = true
@@ -100,19 +104,80 @@ export function TeacherDashboard({ onBack }: { onBack: () => void }) {
     }
   }
 
+  const fetchStudentDetails = async (student: Student) => {
+    console.log('Fetching details for student:', student.id, student.name)
+    setDetailsLoading(true)
+    try {
+      const response = await fetch(`/api/teacher/students/${student.id}/details`)
+      const result = await response.json()
+      
+      console.log('Student details response:', {
+        status: response.status,
+        ok: response.ok,
+        dataLength: result.data?.length || 0,
+        error: result.error,
+        firstActivity: result.data?.[0]
+      })
+      
+      if (response.ok) {
+        setStudentActivities(result.data || [])
+      } else {
+        console.error('Failed to fetch student details:', result.error)
+        setStudentActivities([])
+      }
+    } catch (error) {
+      console.error('Error fetching student details:', error)
+      setStudentActivities([])
+    } finally {
+      setDetailsLoading(false)
+    }
+  }
+
+  const handleViewStudent = (student: Student, mode: "calendar" | "details") => {
+    setSelectedStudent(student)
+    setViewMode(mode)
+    if (mode === "details") {
+      fetchStudentDetails(student)
+    }
+  }
+
+  const handleBackFromStudent = () => {
+    setSelectedStudent(null)
+    setViewMode("calendar")
+    setStudentActivities([])
+  }
+
   if (selectedStudent) {
     return (
       <SidebarProvider>
         <div className="flex h-screen w-full">
           <TeacherSidebar activeView={activeView} onViewChange={setActiveView} />
           <main className="flex-1 overflow-auto">
-            <StudentCalendar
-              student={selectedStudent}
-              onBack={() => setSelectedStudent(null)}
-              // StudentCalendar will fetch activities by itself when student changes
-              activitiesByDate={{}}
-              initialDate={new Date()}
-            />
+            {viewMode === "details" ? (
+              detailsLoading ? (
+                <div className="flex items-center justify-center h-64">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                    <p className="text-gray-600">Memuat detail aktivitas...</p>
+                  </div>
+                </div>
+              ) : (
+                <StudentActivityDetails
+                  student={selectedStudent}
+                  activities={studentActivities}
+                  onBack={handleBackFromStudent}
+                  onRefresh={() => fetchStudentDetails(selectedStudent)}
+                />
+              )
+            ) : (
+              <StudentCalendar
+                student={selectedStudent}
+                onBack={handleBackFromStudent}
+                // StudentCalendar will fetch activities by itself when student changes
+                activitiesByDate={{}}
+                initialDate={new Date()}
+              />
+            )}
           </main>
         </div>
       </SidebarProvider>
@@ -178,7 +243,7 @@ export function TeacherDashboard({ onBack }: { onBack: () => void }) {
             <Card
               key={student.id}
               className="hover:shadow-lg transition-all duration-200 cursor-pointer hover:-translate-y-1"
-              onClick={() => setSelectedStudent(student)}
+              onClick={() => handleViewStudent(student, "calendar")}
             >
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between">
@@ -214,15 +279,29 @@ export function TeacherDashboard({ onBack }: { onBack: () => void }) {
                     <span className="text-sm text-gray-500">{student.lastActivity || "-"}</span>
                   </div>
                 </div>
-                <Button
-                  className="w-full mt-4 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setSelectedStudent(student)
-                  }}
-                >
-                  Lihat Kalender Aktivitas
-                </Button>
+                <div className="flex gap-2 mt-4">
+                  <Button
+                    className="flex-1 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleViewStudent(student, "calendar")
+                    }}
+                    size="sm"
+                  >
+                    Kalender
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-blue-500 text-blue-600 hover:bg-blue-50"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleViewStudent(student, "details")
+                    }}
+                    size="sm"
+                  >
+                    Detail Field
+                  </Button>
+                </div>
               </CardContent>
             </Card>
           ))}

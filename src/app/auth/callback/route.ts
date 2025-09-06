@@ -14,25 +14,32 @@ export async function GET(request: Request) {
       const { data: { user } } = await supabase.auth.getUser()
       
       if (user) {
+        console.log('User authenticated:', user.id, 'Email:', user.email) // Debug log
+        
         // Wait a bit for trigger to complete
         await new Promise(resolve => setTimeout(resolve, 1000))
         
         // Try to get by userid first
-        let { data: profile } = await supabase
+        let { data: profile, error: profileError } = await supabase
           .from('user_profiles')
           .select('userid, username, roleid')
           .eq('userid', user.id)
           .single()
 
+        console.log('Profile query result:', profile, 'Error:', profileError) // Debug log
+
         if (!profile) {
           // If not found, try to find an existing profile by email and link it
           const userEmail = user.email ?? null
+          console.log('Profile not found by userid, trying email:', userEmail) // Debug log
           if (userEmail) {
-            const { data: byEmail } = await supabase
+            const { data: byEmail, error: emailError } = await supabase
               .from('user_profiles')
               .select('userid, username, roleid')
               .eq('email', userEmail)
               .maybeSingle()
+
+            console.log('Profile by email:', byEmail, 'Error:', emailError) // Debug log
 
             if (byEmail) {
               // Link existing email profile to this auth user id
@@ -85,7 +92,7 @@ export async function GET(request: Request) {
             case 'student':
               return NextResponse.redirect(`${origin}/siswa`)
             case 'teacher':
-              return NextResponse.redirect(`${origin}/dashboard/teacher`)
+              return NextResponse.redirect(`${origin}/guru`)
             case 'parent':
               return NextResponse.redirect(`${origin}/orangtua`)
             case 'admin':

@@ -1,11 +1,11 @@
 "use client"
 
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
-import { Users, Link, Unlink } from "lucide-react"
-import React, { useEffect, useState } from "react"
+import { Link, Unlink, Users } from "lucide-react"
+import { useEffect, useState } from "react"
 
 type User = {
   userid: string
@@ -46,8 +46,8 @@ export function ParentStudentManager() {
       const users = result.data || []
       
       // Separate parents and students
-      const parentUsers = users.filter((u: User) => u.roleid === 3)
-      const studentUsers = users.filter((u: User) => u.roleid === 4)
+      const parentUsers = users.filter((u: User) => u.roleid === 4)
+      const studentUsers = users.filter((u: User) => u.roleid === 5)
       
       setParents(parentUsers)
       setStudents(studentUsers)

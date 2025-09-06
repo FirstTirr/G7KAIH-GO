@@ -2,6 +2,30 @@ import { createAdminClient } from "@/utils/supabase/admin"
 import { createClient } from "@/utils/supabase/server"
 import { NextRequest, NextResponse } from "next/server"
 
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ userid: string }> }
+) {
+  try {
+    const { userid } = await params
+    const supabase = await createClient()
+    
+    const { data, error } = await supabase
+      .from("user_profiles")
+      .select("userid, username, email, roleid, kelas, parent_of_userid, created_at, updated_at")
+      .eq("userid", userid)
+      .maybeSingle()
+
+    if (error) throw error
+    if (!data) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+    return NextResponse.json({ data })
+  } catch (err: any) {
+    return NextResponse.json({ error: err.message ?? "User not found" }, { status: 404 })
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ userid: string }> }
@@ -10,7 +34,7 @@ export async function PATCH(
     const { userid } = await params
     const payload = await request.json()
     const update: Record<string, any> = {}
-  for (const key of ["username", "email", "roleid", "kelas"]) {
+    for (const key of ["username", "email", "roleid", "kelas", "parent_of_userid"]) {
       if (key in payload) update[key] = payload[key]
     }
     if (Object.keys(update).length === 0) {
@@ -22,7 +46,7 @@ export async function PATCH(
       .from("user_profiles")
       .update(update)
       .eq("userid", userid)
-  .select("userid, username, email, roleid, kelas, created_at, updated_at")
+      .select("userid, username, email, roleid, kelas, parent_of_userid, created_at, updated_at")
       .single()
 
     if (error) throw error
@@ -89,7 +113,7 @@ export async function DELETE(
       .from("user_profiles")
       .delete()
       .eq("userid", userid)
-      .select("userid, username, email, roleid, kelas")
+      .select("userid, username, email, roleid, kelas, parent_of_userid")
       .maybeSingle()
     if (profileErr) throw profileErr
 

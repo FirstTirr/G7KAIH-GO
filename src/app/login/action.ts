@@ -45,7 +45,7 @@ export async function login(formData: FormData) {
         case 'student':
           redirect('/siswa')
         case 'teacher':
-          redirect('/dashboard')
+          redirect('/guru')
         case 'parent':
           redirect('/orangtua')
         case 'unknown':

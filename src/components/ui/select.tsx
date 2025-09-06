@@ -4,8 +4,8 @@ export function Select({ value, onValueChange, required, children }: { value?: s
   return <div>{children}</div>
 }
 
-export function SelectTrigger({ children }: { children: React.ReactNode }) {
-  return <div className="border rounded px-3 py-2 text-sm">{children}</div>
+export function SelectTrigger({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <div className={`border rounded px-3 py-2 text-sm ${className}`}>{children}</div>
 }
 
 export function SelectValue({ placeholder }: { placeholder?: string }) {

@@ -1,3 +1,4 @@
+import { uploadToCloudinary } from "@/utils/cloudinary"
 import { createClient } from "@/utils/supabase/server"
 import { NextResponse } from "next/server"
 
@@ -208,51 +209,68 @@ export async function POST(request: Request) {
       if (insErr) throw insErr
     }
 
-    // Handle file uploads -> store as BYTEA in aktivitas_field_files
+    // Handle file uploads -> upload to Cloudinary and store URLs
     if (incomingFiles.length > 0) {
-      const fileRows: any[] = []
+      const imageRows: any[] = []
       for (const f of incomingFiles) {
         const meta = fieldMap.get(`${f.categoryid}|${f.field_key}`)
         if (!meta) {
           warnings.push(`File field tidak dikenal: category=${f.categoryid} key=${f.field_key}`)
           continue
         }
-        const ab = await f.file.arrayBuffer()
-        const bytes = Buffer.from(ab)
-        fileRows.push({
-          activityid,
-          fieldid: meta.fieldid,
-          filename: f.file.name || null,
-          content_type: (f.file as any).type || "application/octet-stream",
-          file_bytes: bytes,
-        })
+        
+        // Check file size (limit to 5MB)
+        const maxSize = 5 * 1024 * 1024 // 5MB
+        if (f.file.size > maxSize) {
+          warnings.push(`File ${f.file.name} terlalu besar (${Math.round(f.file.size / 1024 / 1024)}MB). Maksimal 5MB.`)
+          continue
+        }
+        
+        try {
+          const ab = await f.file.arrayBuffer()
+          const buffer = Buffer.from(ab)
+          
+          console.log(`Uploading file to Cloudinary: ${f.file.name}, size: ${f.file.size} bytes`)
+          
+          // Upload to Cloudinary
+          const { url, publicId } = await uploadToCloudinary(
+            buffer,
+            f.file.name || 'file',
+            `g7-aktivitas/${activityid}`
+          )
+          
+          console.log(`File uploaded successfully: ${url}`)
+          
+          imageRows.push({
+            activityid,
+            fieldid: meta.fieldid,
+            filename: f.file.name || null,
+            cloudinary_url: url,
+            cloudinary_public_id: publicId,
+            content_type: (f.file as any).type || "application/octet-stream",
+          })
+        } catch (uploadError: any) {
+          console.error('Cloudinary upload error:', uploadError)
+          warnings.push(`Gagal upload ${f.file.name}: ${uploadError.message}`)
+        }
       }
-      if (fileRows.length > 0) {
-        // Try inserting into aktivitas_field_files; if table missing, fallback to aktivitas.activityimage when only one file
-        const { error: fileErr } = await supabase.from("aktivitas_field_files").insert(fileRows)
-        if (fileErr) {
-          const message = String(fileErr.message || "")
-          const looksMissing = message.includes("does not exist") || message.includes("not found") || message.includes("schema cache")
-          if (looksMissing && fileRows.length === 1) {
-            // Fallback: store first file into aktivitas.activityimage (BYTEA)
-            const bytes = fileRows[0].file_bytes
-            const { error: upErr } = await supabase
-              .from("aktivitas")
-              .update({ activityimage: bytes })
-              .eq("activityid", activityid)
-            if (upErr) {
-              return NextResponse.json(
-                { error: `Gagal menyimpan file ke kolom aktivitas.activityimage: ${upErr.message}` },
-                { status: 500 }
-              )
-            }
-            warnings.push("Tabel aktivitas_field_files belum ada. File disimpan ke aktivitas.activityimage.")
-          } else {
-            return NextResponse.json(
-              { error: `Gagal menyimpan file ke database: ${fileErr.message}. Pastikan tabel aktivitas_field_files dengan kolom (activityid uuid, fieldid uuid, filename text, content_type text, file_bytes bytea, created_at timestamptz default now()) tersedia.` },
-              { status: 500 }
-            )
-          }
+      
+      if (imageRows.length > 0) {
+        console.log(`Saving ${imageRows.length} image URLs to database...`)
+        
+        // Save to aktivitas_field_images table
+        const { error: imageErr } = await supabase
+          .from("aktivitas_field_images")
+          .insert(imageRows)
+        
+        if (imageErr) {
+          console.error("Image URL insert error:", imageErr)
+          return NextResponse.json(
+            { error: `Gagal menyimpan URL gambar ke database: ${imageErr.message}` },
+            { status: 500 }
+          )
+        } else {
+          console.log(`Successfully saved ${imageRows.length} image URLs to database`)
         }
       }
     }

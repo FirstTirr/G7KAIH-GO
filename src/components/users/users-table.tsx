@@ -18,6 +18,7 @@ type UserProfile = {
   email: string | null
   roleid: number | null
   kelas: string | null
+  parent_of_userid?: string | null
   created_at?: string
   updated_at?: string
 }
@@ -64,6 +65,8 @@ function roleBadge(name?: string) {
 
 export default function UsersTable() {
   const [rows, setRows] = React.useState<UserProfile[] | null>(null)
+  const [students, setStudents] = React.useState<UserProfile[]>([])
+  const [parents, setParents] = React.useState<UserProfile[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
   const [page, setPage] = React.useState(1)
@@ -73,6 +76,7 @@ export default function UsersTable() {
 
   const [createOpen, setCreateOpen] = React.useState(false)
   const [editOpen, setEditOpen] = React.useState<null | string>(null) // userid
+  const [editParentValue, setEditParentValue] = React.useState<string>("")
   const [mergeOpen, setMergeOpen] = React.useState<null | string>(null) // fromUserid
   const [mergeTarget, setMergeTarget] = React.useState<string>("")
   const [mergePreferSourceName, setMergePreferSourceName] = React.useState<boolean>(true)
@@ -88,12 +92,12 @@ export default function UsersTable() {
     setLoading(true)
     setError(null)
     try {
-  const params = new URLSearchParams({
+      const params = new URLSearchParams({
         page: String(page),
         pageSize: String(pageSize),
         excludeRole: "1",
       })
-  if (q.trim()) params.set("q", q.trim())
+      if (q.trim()) params.set("q", q.trim())
       const res = await fetch(`/api/user-profiles?${params.toString()}`, { cache: "no-store" })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error || "Failed to load users")
@@ -106,9 +110,55 @@ export default function UsersTable() {
     }
   }, [page, pageSize, q])
 
+  const fetchStudents = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/user-profiles?roleid=5&pageSize=100", { cache: "no-store" })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Failed to load students")
+      setStudents(json.data ?? [])
+    } catch (e: any) {
+      console.error("Error fetching students:", e)
+    }
+  }, [])
+
+  const fetchParents = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/user-profiles?roleid=4&pageSize=100", { cache: "no-store" })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Failed to load parents")
+      setParents(json.data ?? [])
+    } catch (e: any) {
+      console.error("Error fetching parents:", e)
+    }
+  }, [])
+
   React.useEffect(() => {
     fetchRows()
   }, [fetchRows])
+
+  React.useEffect(() => {
+    fetchStudents()
+  }, [fetchStudents])
+
+  React.useEffect(() => {
+    fetchParents()
+  }, [fetchParents])
+
+  // Reset edit parent value when dialog opens/closes
+  React.useEffect(() => {
+    if (editOpen && rows) {
+      const user = rows.find(r => r.userid === editOpen)
+      if (user?.roleid === 5) {
+        // For students, find which parent is watching them
+        const watchingParent = parents.find(p => p.parent_of_userid === user.userid)
+        setEditParentValue(watchingParent?.userid || "")
+      } else {
+        setEditParentValue("")
+      }
+    } else {
+      setEditParentValue("")
+    }
+  }, [editOpen, rows, parents])
 
   const visibleRows = React.useMemo(() => {
     if (!rows) return [] as UserProfile[]
@@ -169,7 +219,9 @@ export default function UsersTable() {
       setRows((prev) =>
         prev?.map((r) => (r.userid === userid ? { ...r, ...json.data! } : r)) || prev
       )
-  setEditOpen(null)
+      // Refresh parents data to update parent_of_userid relationships
+      fetchParents()
+      setEditOpen(null)
     } catch (e: any) {
       setError(e.message)
       fetchRows()
@@ -362,18 +414,19 @@ export default function UsersTable() {
               <th className="px-3 py-2 text-left">Email</th>
               <th className="px-3 py-2 text-left">Role</th>
               <th className="px-3 py-2 text-left">Kelas</th>
+              <th className="px-3 py-2 text-left">Relationship</th>
               <th className="px-3 py-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td className="px-3 py-3" colSpan={6}>Loading…</td>
+                <td className="px-3 py-3" colSpan={7}>Loading…</td>
               </tr>
             )}
             {!loading && visibleRows.length === 0 && (
               <tr>
-                <td className="px-3 py-3" colSpan={6}>No users</td>
+                <td className="px-3 py-3" colSpan={7}>No users</td>
               </tr>
             )}
             {!loading && visibleRows.map((r) => (
@@ -385,6 +438,40 @@ export default function UsersTable() {
                 <td className="px-3 py-2 align-top">{r.email ?? ""}</td>
                 <td className="px-3 py-2 align-top">{roleBadge(roleName(r.roleid))}</td>
                 <td className="px-3 py-2 align-top">{r.kelas ?? "-"}</td>
+                <td className="px-3 py-2 align-top">
+                  {r.roleid === 4 && r.parent_of_userid ? (
+                    // Parent watching a student
+                    <div className="text-xs">
+                      <div className="text-blue-600 font-medium">Parent of:</div>
+                      <div className="font-mono" title={r.parent_of_userid}>
+                        {truncateId(r.parent_of_userid)}
+                      </div>
+                      <div className="text-gray-500">
+                        {students.find(s => s.userid === r.parent_of_userid)?.username || 'Unknown'}
+                      </div>
+                    </div>
+                  ) : r.roleid === 5 ? (
+                    // Student - show which parent is watching them
+                    (() => {
+                      const watchingParent = parents.find(p => p.parent_of_userid === r.userid)
+                      return watchingParent ? (
+                        <div className="text-xs">
+                          <div className="text-green-600 font-medium">Watched by:</div>
+                          <div className="font-mono" title={watchingParent.userid}>
+                            {truncateId(watchingParent.userid)}
+                          </div>
+                          <div className="text-gray-500">
+                            {watchingParent.username}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">No parent assigned</span>
+                      )
+                    })()
+                  ) : (
+                    <span className="text-gray-400">-</span>
+                  )}
+                </td>
                 <td className="px-3 py-2 align-top text-right">
                   <div className="inline-flex gap-2">
                     <Dialog open={mergeOpen === r.userid} onOpenChange={(o) => { setMergeOpen(o ? r.userid : null); setMergeTarget(""); setMergePreferSourceName(true) }}>
@@ -445,16 +532,44 @@ export default function UsersTable() {
                           <DialogTitle>Edit User</DialogTitle>
                         </DialogHeader>
                         <form
-                          onSubmit={(e) => {
+                          onSubmit={async (e) => {
                             e.preventDefault()
                             const fd = new FormData(e.currentTarget as HTMLFormElement)
-                            const payload: Partial<UserProfile> = {
-                              username: String(fd.get("username") || ""),
-                              email: String(fd.get("email") || "").trim() || null,
-                              roleid: fd.get("roleid") ? Number(fd.get("roleid")) : null,
-                              kelas: (String(fd.get("kelas") || "").trim() || null) as any,
+                            
+                            if (r.roleid === 5) {
+                              // For students, handle parent-student relationship
+                              const currentParent = parents.find(p => p.parent_of_userid === r.userid)
+                              const newParentId = editParentValue || null
+                              
+                              // Remove old relationship
+                              if (currentParent && currentParent.userid !== newParentId) {
+                                await handleUpdate(currentParent.userid, { parent_of_userid: null })
+                              }
+                              
+                              // Set new relationship
+                              if (newParentId && newParentId !== currentParent?.userid) {
+                                await handleUpdate(newParentId, { parent_of_userid: r.userid })
+                              }
+                              
+                              // Update student basic info
+                              const studentPayload: Partial<UserProfile> = {
+                                username: String(fd.get("username") || ""),
+                                email: String(fd.get("email") || "").trim() || null,
+                                roleid: fd.get("roleid") ? Number(fd.get("roleid")) : null,
+                                kelas: (String(fd.get("kelas") || "").trim() || null) as any,
+                              }
+                              handleUpdate(r.userid, studentPayload)
+                            } else {
+                              // For non-students, use original logic
+                              const payload: Partial<UserProfile> = {
+                                username: String(fd.get("username") || ""),
+                                email: String(fd.get("email") || "").trim() || null,
+                                roleid: fd.get("roleid") ? Number(fd.get("roleid")) : null,
+                                kelas: (String(fd.get("kelas") || "").trim() || null) as any,
+                                parent_of_userid: editParentValue || null,
+                              }
+                              handleUpdate(r.userid, payload)
                             }
-                            handleUpdate(r.userid, payload)
                           }}
                           className="grid gap-3"
                         >
@@ -474,6 +589,26 @@ export default function UsersTable() {
                             <span>Kelas</span>
                             <input name="kelas" defaultValue={r.kelas ?? ""} className="border rounded-md px-3 py-2" />
                           </div>
+                          {/* Parent selection - Show when editing student (role 5) */}
+                          {r.roleid === 5 && (
+                            <div className="grid gap-1 text-sm">
+                              <span>Dipantau oleh Orang Tua</span>
+                              <select 
+                                value={editParentValue} 
+                                onChange={(e) => {
+                                  setEditParentValue(e.target.value)
+                                }}
+                                className="border rounded-md px-3 py-2"
+                              >
+                                <option value="">-- Tidak ada --</option>
+                                {parents.map((parent) => (
+                                  <option key={parent.userid} value={parent.userid}>
+                                    {parent.username} {parent.email ? `(${parent.email})` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
                           <DialogFooter>
                             <DialogClose asChild>
                               <button type="button" className="px-3 py-2 rounded-md border text-sm">Cancel</button>
