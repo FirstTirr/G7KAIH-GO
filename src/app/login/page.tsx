@@ -1,12 +1,90 @@
+"use client"
+
 import { Button } from '@/components/ui/button'
 import GoogleSignInButton from '@/components/ui/googleButton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import Image from 'next/image'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
+import React, { useEffect, useState } from 'react'
 import { login } from './action'
 
+declare global {
+  interface Window {
+    grecaptcha: {
+      render: (element: string, opts: { sitekey: string }) => void
+      getResponse: () => string
+      reset: () => void
+    }
+  }
+}
+
 export default function LoginPage() {
+  const [error, setError] = useState("")
+  const [loading, setLoading] = useState(false)
+  const router = useRouter()
+
+  useEffect(() => {
+    if (document.getElementById("recaptcha-script")) return
+    
+    // Fungsi untuk render reCAPTCHA setelah siap
+    const renderRecaptcha = () => {
+      const sitekey = process.env.NEXT_PUBLIC_DATA_SITEKEY
+      if (sitekey && window.grecaptcha && window.grecaptcha.render) {
+        try {
+          window.grecaptcha.render("recaptcha-container", {
+            sitekey: sitekey,
+          })
+        } catch (error) {
+          console.error("Error rendering reCAPTCHA:", error)
+        }
+      }
+    }
+
+    // Set callback global untuk reCAPTCHA
+    (window as any).onRecaptchaLoad = renderRecaptcha
+
+    const script = document.createElement("script")
+    script.id = "recaptcha-script"
+    script.src = `https://www.google.com/recaptcha/api.js?onload=onRecaptchaLoad&render=explicit`
+    script.async = true
+    script.defer = true
+    document.body.appendChild(script)
+  }, [])
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    setError("")
+    setLoading(true)
+    try {
+      // Tunggu grecaptcha siap
+      if (!window.grecaptcha || !window.grecaptcha.getResponse) {
+        setError("reCAPTCHA belum siap. Silakan reload halaman.")
+        setLoading(false)
+        return
+      }
+      const token = window.grecaptcha.getResponse()
+      if (!token) {
+        setError("Silakan selesaikan reCAPTCHA terlebih dahulu.")
+        setLoading(false)
+        return
+      }
+      const formData = new FormData(e.currentTarget)
+      formData.append("g-recaptcha-response", token)
+      await login(formData)
+      router.refresh()
+    } catch (err: any) {
+      setError(err?.message || "Login gagal")
+    } finally {
+      setLoading(false)
+      // Reset reCAPTCHA setelah submit
+      if (window.grecaptcha && window.grecaptcha.reset) {
+        window.grecaptcha.reset()
+      }
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-start pt-16 px-6">
       {/* Logo */}
@@ -32,7 +110,7 @@ export default function LoginPage() {
 
       {/* Email and Password Login Form */}
       <div className="w-full max-w-sm mb-6">
-        <form action={login} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
@@ -44,7 +122,6 @@ export default function LoginPage() {
               className="w-full"
             />
           </div>
-          
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
             <Input
@@ -56,9 +133,13 @@ export default function LoginPage() {
               className="w-full"
             />
           </div>
-
-          <Button type="submit" className="w-full">
-            Login
+          {/* Google reCAPTCHA v2 widget */}
+          <div className="my-4">
+            <div id="recaptcha-container"></div>
+          </div>
+          {error && <div className="text-red-600 text-sm">{error}</div>}
+          <Button type="submit" className="w-full" disabled={loading}>
+            {loading ? "Memproses..." : "Login"}
           </Button>
         </form>
       </div>

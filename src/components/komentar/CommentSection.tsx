@@ -27,17 +27,19 @@ interface CommentSectionProps {
 function getRoleName(roleid?: number): string {
   switch (roleid) {
     case 2: return "Guru"
-    case 3: return "Orang Tua"
-    case 4: return "Siswa"
-    default: return "Unknown"
+    case 3: return "Admin"
+    case 4: return "Orang Tua"
+    case 5: return "Siswa"
+    default: return "Pengguna"
   }
 }
 
 function getRoleBadgeVariant(roleid?: number): "default" | "secondary" | "outline" {
   switch (roleid) {
     case 2: return "default" // Guru - darker
-    case 3: return "secondary" // Orang Tua - gray
-    case 4: return "outline" // Siswa - outlined
+    case 3: return "secondary" // Admin - gray
+    case 4: return "outline" // Orang Tua - outlined
+    case 5: return "outline" // Siswa - outlined
     default: return "outline"
   }
 }
@@ -225,7 +227,7 @@ export function CommentSection({ siswaId, currentUserId }: CommentSectionProps) 
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <span className="font-medium text-sm">
-                        {comment.user_profiles?.username || "Unknown User"}
+                        {comment.user_profiles?.username || "Pengguna"}
                       </span>
                       <Badge variant={getRoleBadgeVariant(comment.user_profiles?.roleid)}>
                         {getRoleName(comment.user_profiles?.roleid)}

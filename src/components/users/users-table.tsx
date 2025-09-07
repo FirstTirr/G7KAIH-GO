@@ -447,7 +447,7 @@ export default function UsersTable() {
                         {truncateId(r.parent_of_userid)}
                       </div>
                       <div className="text-gray-500">
-                        {students.find(s => s.userid === r.parent_of_userid)?.username || 'Unknown'}
+                        {students.find(s => s.userid === r.parent_of_userid)?.username || 'Siswa Tidak Diketahui'}
                       </div>
                     </div>
                   ) : r.roleid === 5 ? (

@@ -276,9 +276,8 @@ export async function GET() {
         verifiedName ||
         auth.name ||
         derived ||
-        profMerged.email ||
-        auth.email ||
-        "Siswa"
+        (profMerged.email || auth.email)?.split('@')[0] ||
+        `Siswa ${primaryUid.slice(0, 8)}`
 
       return {
         id: primaryUid,

@@ -1,6 +1,7 @@
 "use client"
 import Link from "next/link";
 import * as React from "react";
+import LogoutButton from "@/components/ui/logoutButton";
 
 type Kegiatan = { kegiatanid: string; kegiatanname: string; created_at?: string; categories?: { categoryid: string; categoryname: string }[] }
 
@@ -32,7 +33,10 @@ export default function Page() {
 
   return (
     <div className="p-4 space-y-4">
-      <h1 className="text-lg font-semibold">Kegiatan</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-lg font-semibold">Kegiatan</h1>
+        <LogoutButton />
+      </div>
       {loading ? (
         <div>Memuat…</div>
       ) : error ? (

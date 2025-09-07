@@ -43,7 +43,6 @@ type Activity = {
   created_at: string
   student_name: string
   kegiatan_name: string
-  category_name: string
   field_values: FieldValue[]
 }
 
@@ -246,7 +245,7 @@ async function toggleValidation(fieldValueId: string, currentStatus: boolean) {
 
 export function StudentActivityDetails({
   student,
-  activities,
+  activities: initialActivities,
   onBack,
   onRefresh
 }: {
@@ -257,6 +256,12 @@ export function StudentActivityDetails({
 }) {
   const { userId: currentUserId } = useCurrentUser()
   const [validatingFieldId, setValidatingFieldId] = React.useState<string | null>(null)
+  const [activities, setActivities] = React.useState<Activity[]>(initialActivities)
+
+  // Update local activities when prop changes
+  React.useEffect(() => {
+    setActivities(initialActivities)
+  }, [initialActivities])
 
   console.log('StudentActivityDetails props:', {
     student,
@@ -270,7 +275,31 @@ export function StudentActivityDetails({
     setValidatingFieldId(fieldValue.id)
     try {
       await toggleValidation(fieldValue.id, fieldValue.validation.byTeacher)
-      onRefresh?.()
+      
+      // Update local state instead of calling onRefresh
+      setActivities(prevActivities => 
+        prevActivities.map(activity => ({
+          ...activity,
+          field_values: activity.field_values.map(fv => 
+            fv.id === fieldValue.id 
+              ? {
+                  ...fv,
+                  validation: {
+                    ...fv.validation,
+                    byTeacher: !fv.validation.byTeacher,
+                    status: !fv.validation.byTeacher && fv.validation.byParent
+                      ? 'fully_validated'
+                      : !fv.validation.byTeacher
+                      ? 'teacher_validated'
+                      : fv.validation.byParent
+                      ? 'parent_validated'
+                      : 'pending'
+                  }
+                }
+              : fv
+          )
+        }))
+      )
     } catch (error) {
       console.error('Failed to toggle validation:', error)
     } finally {
@@ -383,9 +412,6 @@ export function StudentActivityDetails({
                       <div key={activity.id} className="border-l-4 border-blue-200 pl-4 space-y-4">
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs">
-                              {activity.category_name}
-                            </Badge>
                             <span className="text-xs text-gray-500">
                               {formatTime(activity.created_at)}
                             </span>

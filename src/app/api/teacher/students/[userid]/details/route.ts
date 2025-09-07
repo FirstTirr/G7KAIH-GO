@@ -161,9 +161,8 @@ export async function GET(
       return {
         ...activity,
         id: activity.activityid, // Map activityid to id for frontend consistency
-        student_name: studentProfile.username || 'Unknown',
-        kegiatan_name: (activity.kegiatan as any)?.kegiatanname || 'Unknown',
-        category_name: (activity.category as any)?.categoryname || 'Unknown',
+        student_name: studentProfile.username || `Siswa ${studentId.slice(0, 8)}`,
+        kegiatan_name: (activity.kegiatan as any)?.kegiatanname || 'Kegiatan Tidak Diketahui',
         submission_date: activity.created_at,
         field_values,
       }
@@ -174,7 +173,7 @@ export async function GET(
       data: activitiesWithFieldValues,
       student: {
         id: studentId,
-        name: studentProfile.username || 'Unknown'
+        name: studentProfile.username || `Siswa ${studentId.slice(0, 8)}`
       },
       debug: {
         activitiesCount: activities?.length || 0,

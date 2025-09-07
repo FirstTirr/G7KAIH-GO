@@ -3,6 +3,7 @@
 import {
     Sidebar,
     SidebarContent,
+    SidebarFooter,
     SidebarGroup,
     SidebarGroupLabel,
     SidebarHeader,
@@ -11,7 +12,8 @@ import {
     SidebarMenuItem,
     SidebarRail,
 } from "@/components/ui/sidebar"
-import { BarChart3, Calendar, FileText, LayoutDashboard, Users } from "lucide-react"
+import LogoutButton from "@/components/ui/logoutButton"
+import { FileText, Users } from "lucide-react"
 
 export function TeacherSidebar({
   activeView,
@@ -21,10 +23,7 @@ export function TeacherSidebar({
   onViewChange: (v: string) => void
 }) {
   const items = [
-    { key: "dashboard", title: "Overview", icon: LayoutDashboard },
     { key: "students", title: "Siswa", icon: Users },
-    { key: "calendar", title: "Kalender", icon: Calendar },
-    { key: "statistics", title: "Statistik", icon: BarChart3 },
     { key: "reports", title: "Laporan", icon: FileText },
   ] as const
 
@@ -52,6 +51,15 @@ export function TeacherSidebar({
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
+      <SidebarFooter>
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <div className="p-2">
+              <LogoutButton />
+            </div>
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
       <SidebarRail />
     </Sidebar>
   )

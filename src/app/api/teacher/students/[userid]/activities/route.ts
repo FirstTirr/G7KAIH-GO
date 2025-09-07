@@ -33,6 +33,7 @@ export async function GET(req: NextRequest, { params }: { params: { userid: stri
     }
   const url = new URL(req.url)
   const month = url.searchParams.get("month") // YYYY-MM atau "latest"
+  const date = url.searchParams.get("date") // YYYY-MM-DD untuk filter hari tertentu
   const includeAliases = /^(1|true|yes)$/i.test(url.searchParams.get("includeAliases") || "")
   const expandOptions = /^(1|true|yes)$/i.test(url.searchParams.get("expandOptions") || "")
 
@@ -128,6 +129,17 @@ export async function GET(req: NextRequest, { params }: { params: { userid: stri
     }
     let { start, end, monthUsed } = bounds
 
+    // Jika ada parameter date, filter berdasarkan hari tertentu
+    if (date && /^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const targetDate = new Date(date + "T00:00:00.000Z")
+      const nextDay = new Date(targetDate)
+      nextDay.setUTCDate(nextDay.getUTCDate() + 1)
+      
+      start = targetDate
+      end = nextDay
+      monthUsed = date // Gunakan tanggal sebagai identifier
+    }
+
     const { data: items, error } = await supabase
       .from("aktivitas")
       .select("activityid, activityname, activitycontent, status, created_at, categoryid, category:categoryid(categoryid, categoryname)")
@@ -139,47 +151,45 @@ export async function GET(req: NextRequest, { params }: { params: { userid: stri
     if (error) throw error
 
   let result = items || []
-    console.log("[activities API] initial month query count=", result.length, { monthUsed, start: start.toISOString(), end: end.toISOString() })
-    // Fallback: if no items for requested month and request wasn't "latest", try latest month with data
-    if (result.length === 0 && month !== "latest") {
-      const latestBounds = await getMonthBounds("latest")
-      if (latestBounds) {
-        start = latestBounds.start
-        end = latestBounds.end
-        monthUsed = latestBounds.monthUsed
-        const { data: latestItems, error: latestErr } = await supabase
+    console.log("[activities API] initial query count=", result.length, { monthUsed, start: start.toISOString(), end: end.toISOString() })
+    
+    // Skip fallback logic jika menggunakan filter tanggal spesifik
+    if (!date) {
+      // Fallback: if no items for requested month and request wasn't "latest", try latest month with data
+      if (result.length === 0 && month !== "latest") {
+        const latestBounds = await getMonthBounds("latest")
+        if (latestBounds) {
+          start = latestBounds.start
+          end = latestBounds.end
+          monthUsed = latestBounds.monthUsed
+          const { data: latestItems, error: latestErr } = await supabase
+            .from("aktivitas")
+            .select("activityid, activityname, activitycontent, status, created_at, categoryid, category:categoryid(categoryid, categoryname)")
+            .in("userid", aliasIds)
+            .gte("created_at", start.toISOString())
+            .lt("created_at", end.toISOString())
+            .order("created_at", { ascending: true })
+          if (latestErr) throw latestErr
+          result = latestItems || []
+    console.log("[activities API] latest month fallback count=", result.length, { monthUsed })
+        }
+      }
+
+      // Final fallback: if still empty, try fetching recent entries regardless of month
+      if ((result?.length ?? 0) === 0) {
+        const { data: recent, error: recentErr } = await supabase
           .from("aktivitas")
           .select("activityid, activityname, activitycontent, status, created_at, categoryid, category:categoryid(categoryid, categoryname)")
           .in("userid", aliasIds)
-          .gte("created_at", start.toISOString())
-          .lt("created_at", end.toISOString())
           .order("created_at", { ascending: true })
-        if (latestErr) throw latestErr
-        result = latestItems || []
-  console.log("[activities API] latest month fallback count=", result.length, { monthUsed })
+          .limit(20)
+        if (recentErr) throw recentErr
+        result = recent || []
+        console.log("[activities API] recent fallback count=", result.length)
       }
     }
 
-    // Final fallback: if still empty, try fetching recent entries regardless of month
-    if ((result?.length ?? 0) === 0) {
-      const { data: recent, error: recentErr } = await supabase
-        .from("aktivitas")
-        .select("activityid, activityname, activitycontent, status, created_at, categoryid, category:categoryid(categoryid, categoryname)")
-        .in("userid", aliasIds)
-        .order("created_at", { ascending: true })
-        .limit(100)
-      if (recentErr) throw recentErr
-      if (recent && recent.length > 0) {
-        result = recent
-        const last = new Date(recent[recent.length - 1].created_at as string)
-        const y = last.getFullYear()
-        const m = last.getMonth()
-        monthUsed = `${y}-${String(m + 1).padStart(2, "0")}`
-  console.log("[activities API] recent fallback count=", result.length, { monthUsed })
-      }
-    }
-
-    // If some activities have no categoryid, try deriving from field values -> category_fields
+    // Backfill categoryid untuk entries yang belum memilikinya
     try {
       const missingIds = (result || []).filter((r: any) => !r?.categoryid).map((r: any) => r.activityid)
       if (missingIds.length > 0) {

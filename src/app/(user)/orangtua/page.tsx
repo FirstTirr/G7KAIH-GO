@@ -1,12 +1,14 @@
 "use client"
 
+import { CommentSection } from "@/components/komentar/CommentSection"
 import { StudentActivities } from "@/components/orangtua/StudentActivities"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import LogoutButton from "@/components/ui/logoutButton"
 import { useCurrentUser } from "@/hooks/use-current-user"
-import { Activity, GraduationCap, User } from "lucide-react"
+import { Activity, GraduationCap, MessageCircle, User } from "lucide-react"
 import { useEffect, useState } from "react"
 
 type Student = {
@@ -149,10 +151,13 @@ export default function OrangTuaPage() {
         {/* Header */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Dashboard Orang Tua - {data.parent.username}
-            </CardTitle>
+            <div className="flex justify-between items-center">
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Dashboard Orang Tua - {data.parent.username}
+              </CardTitle>
+              <LogoutButton />
+            </div>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-4 p-4 bg-green-50 border border-green-200 rounded-lg">
@@ -193,10 +198,14 @@ export default function OrangTuaPage() {
 
         {/* Tabs untuk konten */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="activities" className="flex items-center gap-2">
               <Activity className="h-4 w-4" />
               Aktivitas Siswa
+            </TabsTrigger>
+            <TabsTrigger value="comments" className="flex items-center gap-2">
+              <MessageCircle className="h-4 w-4" />
+              Komentar
             </TabsTrigger>
             <TabsTrigger value="profile" className="flex items-center gap-2">
               <User className="h-4 w-4" />
@@ -206,6 +215,30 @@ export default function OrangTuaPage() {
           
           <TabsContent value="activities" className="mt-6">
             <StudentActivities studentId={data.student.userid} />
+          </TabsContent>
+          
+          <TabsContent value="comments" className="mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <MessageCircle className="h-5 w-5" />
+                  Komentar untuk {data.student.username}
+                </CardTitle>
+                <p className="text-sm text-gray-600 mt-2">
+                  Berikan komentar, saran, atau pertanyaan terkait aktivitas anak Anda
+                </p>
+              </CardHeader>
+              <CardContent>
+                {currentUserId ? (
+                  <CommentSection 
+                    siswaId={data.student.userid} 
+                    currentUserId={currentUserId} 
+                  />
+                ) : (
+                  <p className="text-gray-500">Loading...</p>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
           
           <TabsContent value="profile" className="mt-6">

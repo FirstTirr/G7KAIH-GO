@@ -1,10 +1,11 @@
 "use client"
 
-import { Activity, AudioWaveform, Command, GalleryVerticalEnd, ListTodo, Users } from "lucide-react"
+import { Activity, AudioWaveform, Command, GalleryVerticalEnd, ListTodo, Users, LogOut } from "lucide-react"
 import Link from "next/link"
 import * as React from "react"
 
 import { TeamSwitcher } from "@/components/sidebar/team-switcher"
+import LogoutButton from "@/components/ui/logoutButton"
 import {
   Sidebar,
   SidebarContent,
@@ -79,7 +80,13 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarContent>
       <SidebarFooter>
-        {/* Footer can later host user/account controls */}
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <div className="p-2">
+              <LogoutButton />
+            </div>
+          </SidebarMenuItem>
+        </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>
