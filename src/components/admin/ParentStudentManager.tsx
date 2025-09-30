@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectEmpty, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select-improved"
 import { Link, Unlink, Users } from "lucide-react"
 import { useEffect, useState } from "react"
 
@@ -80,10 +80,13 @@ export function ParentStudentManager() {
     setError(null)
 
     try {
-      const response = await fetch("/api/orangtua/siswa", {
+      const response = await fetch("/api/admin/link-parent-student", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ student_userid: selectedStudent }),
+        body: JSON.stringify({ 
+          parentId: selectedParent, 
+          studentId: selectedStudent 
+        }),
       })
 
       const result = await response.json()
@@ -178,12 +181,20 @@ export function ParentStudentManager() {
                 <SelectTrigger>
                   <SelectValue placeholder="Pilih orang tua..." />
                 </SelectTrigger>
-                <SelectContent>
-                  {parents.map((parent) => (
-                    <SelectItem key={parent.userid} value={parent.userid}>
-                      {parent.username} ({parent.email})
-                    </SelectItem>
-                  ))}
+                <SelectContent searchable searchPlaceholder="Cari orang tua...">
+                  {parents.length === 0 ? (
+                    <SelectEmpty>Tidak ada orang tua tersedia</SelectEmpty>
+                  ) : (
+                    parents.map((parent) => (
+                      <SelectItem 
+                        key={parent.userid} 
+                        value={parent.userid}
+                        searchableText={`${parent.username} ${parent.email}`}
+                      >
+                        {parent.username} ({parent.email})
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>
@@ -194,12 +205,20 @@ export function ParentStudentManager() {
                 <SelectTrigger>
                   <SelectValue placeholder="Pilih siswa..." />
                 </SelectTrigger>
-                <SelectContent>
-                  {students.map((student) => (
-                    <SelectItem key={student.userid} value={student.userid}>
-                      {student.username} - {student.kelas}
-                    </SelectItem>
-                  ))}
+                <SelectContent searchable searchPlaceholder="Cari siswa...">
+                  {students.length === 0 ? (
+                    <SelectEmpty>Tidak ada siswa tersedia</SelectEmpty>
+                  ) : (
+                    students.map((student) => (
+                      <SelectItem 
+                        key={student.userid} 
+                        value={student.userid}
+                        searchableText={`${student.username} ${student.kelas}`}
+                      >
+                        {student.username} - {student.kelas}
+                      </SelectItem>
+                    ))
+                  )}
                 </SelectContent>
               </Select>
             </div>

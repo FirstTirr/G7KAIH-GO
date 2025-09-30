@@ -76,7 +76,11 @@ export default function KegiatanTable() {
     const res = await fetch("/api/kegiatan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kegiatanname, categories: selectedCats }),
+      body: JSON.stringify({
+        kegiatanname,
+        categories: selectedCats,
+        autoAttachAllCategories: selectedCats.length === 0,
+      }),
     })
     if (!res.ok) {
       const json = await res.json()
@@ -140,7 +144,14 @@ export default function KegiatanTable() {
             </button>
             <button
               className="bg-indigo-600 text-white text-sm px-3 py-1.5 rounded inline-flex items-center gap-2 hover:bg-indigo-700"
-              onClick={() => setOpen(true)}
+              onClick={() => {
+                setSelectedCats(
+                  categories
+                    .map((c) => (typeof c.categoryid === "string" ? c.categoryid : ""))
+                    .filter((id) => id.length > 0)
+                )
+                setOpen(true)
+              }}
             >
               <Plus className="w-4 h-4" />
               Tambah

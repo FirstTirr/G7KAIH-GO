@@ -114,14 +114,21 @@ export default function PendingAccounts() {
                 <td className="px-3 py-2 align-top">{u.email}</td>
                 <td className="px-3 py-2 align-top">
                   <div className="flex items-center gap-2">
-                    <select className="border rounded-md px-2 py-1" defaultValue="" onChange={(e) => {
-                      const val = Number(e.target.value)
-                      if (!val) return
-                      confirmRole(u.userid, val)
-                    }}>
-                      <option value="" disabled>Pilih role…</option>
+                    <select 
+                      className="border rounded-md px-2 py-1 w-40 bg-white" 
+                      defaultValue="" 
+                      onChange={(e) => {
+                        const val = Number(e.target.value)
+                        if (val) {
+                          confirmRole(u.userid, val)
+                        }
+                      }}
+                    >
+                      <option value="" disabled>Pilih role...</option>
                       {roles.map((r) => (
-                        <option key={r.roleid} value={r.roleid}>{r.rolename}</option>
+                        <option key={r.roleid} value={r.roleid}>
+                          {r.rolename}
+                        </option>
                       ))}
                     </select>
                   </div>

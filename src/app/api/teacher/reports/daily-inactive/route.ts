@@ -21,8 +21,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
-    const url = new URL(request.url)
-    const date = url.searchParams.get("date") || new Date().toISOString().split('T')[0]
+  const searchParams = request.nextUrl.searchParams
+  const date = searchParams.get("date") || new Date().toISOString().split('T')[0]
 
     // Validate date format
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {

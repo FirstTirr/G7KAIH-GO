@@ -3,25 +3,26 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { activityid: string; fieldid: string } }
+  { params }: { params: Promise<{ activityid: string; fieldid: string }> }
 ) {
   try {
-    console.log('File API request:', params)
+    const { activityid, fieldid } = await params
+    console.log('File API request:', { activityid, fieldid })
     const supabase = await createClient()
     
     // Get file from aktivitas_field_files table
     const { data: files, error } = await supabase
       .from("aktivitas_field_files")
       .select("filename, content_type, file_bytes")
-      .eq("activityid", params.activityid)
-      .eq("fieldid", params.fieldid)
+      .eq("activityid", activityid)
+      .eq("fieldid", fieldid)
       .limit(1)
 
     console.log('File query result:', { 
       filesCount: files?.length || 0, 
       error: error?.message,
-      activityid: params.activityid,
-      fieldid: params.fieldid
+      activityid,
+      fieldid
     })
 
     if (error) {
@@ -30,7 +31,7 @@ export async function GET(
     }
 
     if (!files || files.length === 0) {
-      console.log("No files found for activityid:", params.activityid, "fieldid:", params.fieldid)
+      console.log("No files found for activityid:", activityid, "fieldid:", fieldid)
       return NextResponse.json({ error: "File not found" }, { status: 404 })
     }
 

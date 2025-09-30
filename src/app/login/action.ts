@@ -15,7 +15,16 @@ export async function login(formData: FormData) {
   const { error } = await supabase.auth.signInWithPassword(data)
 
   if (error) {
-    redirect('/error')
+    // Return specific error messages based on error type
+    if (error.message.includes('Invalid login credentials')) {
+      throw new Error('Email atau password salah. Silakan periksa kembali.')
+    } else if (error.message.includes('Email not confirmed')) {
+      throw new Error('Email belum dikonfirmasi. Silakan periksa email Anda.')
+    } else if (error.message.includes('Too many requests')) {
+      throw new Error('Terlalu banyak percobaan login. Silakan coba lagi nanti.')
+    } else {
+      throw new Error(error.message || 'Terjadi kesalahan saat login')
+    }
   }
 
   // Get user profile and redirect based on role
@@ -46,6 +55,8 @@ export async function login(formData: FormData) {
           redirect('/siswa')
         case 'teacher':
           redirect('/guru')
+        case 'guruwali':
+          redirect('/guruwali')
         case 'parent':
           redirect('/orangtua')
         case 'unknown':

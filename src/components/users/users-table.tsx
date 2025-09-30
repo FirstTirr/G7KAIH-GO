@@ -1,15 +1,15 @@
 "use client"
 
 import {
-    Dialog,
-    DialogClose,
-    DialogContent,
-    DialogFooter,
-    DialogHeader,
-    DialogTitle,
-    DialogTrigger,
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
 } from "@/components/ui/dialog"
-import { GitMerge, Pencil, RefreshCcw, Search, Trash2, UserPlus } from "lucide-react"
+import { Pencil, RefreshCcw, Search, Trash2, UserPlus } from "lucide-react"
 import React from "react"
 
 type UserProfile = {
@@ -18,9 +18,12 @@ type UserProfile = {
   email: string | null
   roleid: number | null
   kelas: string | null
-  parent_of_userid?: string | null
-  created_at?: string
-  updated_at?: string
+  parent_of_userid: string | null
+}
+
+type Role = {
+  roleid: number
+  rolename: string
 }
 
 type ApiResponse<T> = { data?: T; error?: string; ok?: boolean }
@@ -32,8 +35,13 @@ function truncateId(id: string, len = 6) {
     : `${id.slice(0, len)}…${id.slice(-len)}`
 }
 
-function roleName(id?: number | null) {
+function roleName(id?: number | null, roles?: Role[]) {
   if (!id || id === 1) return "" // hide unknown
+  if (roles) {
+    const role = roles.find(r => r.roleid === id)
+    return role?.rolename?.toLowerCase() || ""
+  }
+  // Fallback for existing mapping
   switch (id) {
     case 2:
       return "teacher"
@@ -43,8 +51,10 @@ function roleName(id?: number | null) {
       return "parent"
     case 5:
       return "student"
+    case 6:
+      return "guruwali"
     default:
-      return String(id)
+      return ""
   }
 }
 
@@ -65,6 +75,7 @@ function roleBadge(name?: string) {
 
 export default function UsersTable() {
   const [rows, setRows] = React.useState<UserProfile[] | null>(null)
+  const [roles, setRoles] = React.useState<Role[]>([])
   const [students, setStudents] = React.useState<UserProfile[]>([])
   const [parents, setParents] = React.useState<UserProfile[]>([])
   const [loading, setLoading] = React.useState(true)
@@ -76,10 +87,15 @@ export default function UsersTable() {
 
   const [createOpen, setCreateOpen] = React.useState(false)
   const [editOpen, setEditOpen] = React.useState<null | string>(null) // userid
+  const [showEditPassword, setShowEditPassword] = React.useState(false)
   const [editParentValue, setEditParentValue] = React.useState<string>("")
-  const [mergeOpen, setMergeOpen] = React.useState<null | string>(null) // fromUserid
-  const [mergeTarget, setMergeTarget] = React.useState<string>("")
-  const [mergePreferSourceName, setMergePreferSourceName] = React.useState<boolean>(true)
+  const [editForm, setEditForm] = React.useState<{
+    username: string
+    email: string
+    roleid: string
+    kelas: string
+    password: string
+  }>({ username: "", email: "", roleid: "", kelas: "", password: "" })
   const [form, setForm] = React.useState<{
     username: string
     email: string
@@ -110,6 +126,17 @@ export default function UsersTable() {
     }
   }, [page, pageSize, q])
 
+  const fetchRoles = React.useCallback(async () => {
+    try {
+      const res = await fetch("/api/roles", { cache: "no-store" })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Failed to load roles")
+      setRoles(json.data ?? [])
+    } catch (e: any) {
+      console.error("Error fetching roles:", e.message)
+    }
+  }, [])
+
   const fetchStudents = React.useCallback(async () => {
     try {
       const res = await fetch("/api/user-profiles?roleid=5&pageSize=100", { cache: "no-store" })
@@ -137,6 +164,10 @@ export default function UsersTable() {
   }, [fetchRows])
 
   React.useEffect(() => {
+    fetchRoles()
+  }, [fetchRoles])
+
+  React.useEffect(() => {
     fetchStudents()
   }, [fetchStudents])
 
@@ -144,19 +175,32 @@ export default function UsersTable() {
     fetchParents()
   }, [fetchParents])
 
-  // Reset edit parent value when dialog opens/closes
+  // Reset edit form and parent value when dialog opens/closes
   React.useEffect(() => {
     if (editOpen && rows) {
       const user = rows.find(r => r.userid === editOpen)
-      if (user?.roleid === 5) {
+      if (user) {
+        // Set form data
+        setEditForm({
+          username: user.username ?? "",
+          email: user.email ?? "",
+          roleid: user.roleid?.toString() ?? "",
+          kelas: user.kelas ?? "",
+          password: ""
+        })
+        
         // For students, find which parent is watching them
-        const watchingParent = parents.find(p => p.parent_of_userid === user.userid)
-        setEditParentValue(watchingParent?.userid || "")
-      } else {
-        setEditParentValue("")
+        if (user.roleid === 5) {
+          const watchingParent = parents.find(p => p.parent_of_userid === user.userid)
+          setEditParentValue(watchingParent?.userid || "")
+        } else {
+          setEditParentValue("")
+        }
       }
     } else {
       setEditParentValue("")
+      setEditForm({ username: "", email: "", roleid: "", kelas: "", password: "" })
+      setShowEditPassword(false)
     }
   }, [editOpen, rows, parents])
 
@@ -228,6 +272,22 @@ export default function UsersTable() {
     }
   }
 
+  async function handlePasswordUpdate(userid: string, password: string) {
+    try {
+      const res = await fetch(`/api/user-profiles/${userid}/password`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      })
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || "Failed to update password")
+      return true
+    } catch (e: any) {
+      setError(e.message)
+      return false
+    }
+  }
+
   async function handleDelete(userid: string) {
     setError(null)
     // optimistic
@@ -240,34 +300,6 @@ export default function UsersTable() {
     } catch (e: any) {
       setError(e.message)
       setRows(prevRows)
-    }
-  }
-
-  async function handleMerge(fromUserid: string) {
-    setError(null)
-    try {
-      if (!mergeTarget || mergeTarget === fromUserid) {
-        throw new Error("Target userid harus diisi dan berbeda")
-      }
-      const res = await fetch("/api/admin/merge-users", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fromUserid, toUserid: mergeTarget, preferSourceName: mergePreferSourceName }),
-      })
-      const json: ApiResponse<any> = await res.json()
-      if (!res.ok) {
-        if (res.status === 401) throw new Error("Unauthorized: login dulu sebagai admin")
-        if (res.status === 403) throw new Error("Forbidden: hanya admin yang bisa merge")
-        throw new Error(json.error || "Gagal merge user")
-      }
-      // Optimistic: remove source row and refresh
-      setRows((cur) => cur?.filter((r) => r.userid !== fromUserid) || null)
-  setMergeOpen(null)
-  setMergeTarget("")
-  setMergePreferSourceName(true)
-      fetchRows()
-    } catch (e: any) {
-      setError(e.message)
     }
   }
 
@@ -303,28 +335,6 @@ export default function UsersTable() {
               <RefreshCcw className="h-4 w-4" />
               <span className="hidden sm:inline">Refresh</span>
             </button>
-            <button
-              onClick={async () => {
-                setError(null)
-                try {
-                  const res = await fetch('/api/admin/auto-merge', { method: 'POST' })
-                  const json = await res.json()
-                  if (!res.ok) {
-                    if (res.status === 401) throw new Error('Unauthorized: login dulu sebagai admin')
-                    if (res.status === 403) throw new Error('Forbidden: hanya admin yang bisa auto-merge')
-                    throw new Error(json.error || 'Gagal auto-merge')
-                  }
-                  await fetchRows()
-                } catch (e: any) {
-                  setError(e.message)
-                }
-              }}
-              title="Auto merge duplikat (username/email)"
-              className="inline-flex items-center gap-1 text-sm px-3 py-2 rounded-md border hover:bg-gray-50"
-            >
-              <GitMerge className="h-4 w-4" />
-              <span className="hidden sm:inline">Auto Merge</span>
-            </button>
             <Dialog open={createOpen} onOpenChange={setCreateOpen}>
               <DialogTrigger asChild>
                 <button className="inline-flex items-center gap-1 bg-emerald-600 text-white text-sm px-3 py-2 rounded-md hover:bg-emerald-700">
@@ -358,15 +368,23 @@ export default function UsersTable() {
                   /> 
                 </label>
                 <label className="grid gap-1 text-sm">
-                  <span>Role ID</span>
-                  <input
-                    required
-                    type="number"
+                  <span>Role</span>
+                  <select
                     value={form.roleid}
-                    onChange={(e) => setForm((s) => ({ ...s, roleid: e.target.value }))}
-                    placeholder="roleid"
-                    className="border rounded-md px-3 py-2"
-                  />
+                    onChange={(e) => {
+                      console.log("Role selected:", e.target.value)
+                      setForm((s) => ({ ...s, roleid: e.target.value }))
+                    }}
+                    required
+                    className="border rounded-md px-3 py-2 bg-white"
+                  >
+                    <option value="">Pilih role...</option>
+                    {roles.filter(role => role.roleid !== 1).map((role) => (
+                      <option key={role.roleid} value={role.roleid.toString()}>
+                        {role.rolename}
+                      </option>
+                    ))}
+                  </select>
                 </label>
                 <label className="grid gap-1 text-sm">
                   <span>Kelas (opsional)</span>
@@ -436,7 +454,7 @@ export default function UsersTable() {
                 </td>
                 <td className="px-3 py-2 align-top">{r.username}</td>
                 <td className="px-3 py-2 align-top">{r.email ?? ""}</td>
-                <td className="px-3 py-2 align-top">{roleBadge(roleName(r.roleid))}</td>
+                <td className="px-3 py-2 align-top">{roleBadge(roleName(r.roleid, roles))}</td>
                 <td className="px-3 py-2 align-top">{r.kelas ?? "-"}</td>
                 <td className="px-3 py-2 align-top">
                   {r.roleid === 4 && r.parent_of_userid ? (
@@ -474,52 +492,6 @@ export default function UsersTable() {
                 </td>
                 <td className="px-3 py-2 align-top text-right">
                   <div className="inline-flex gap-2">
-                    <Dialog open={mergeOpen === r.userid} onOpenChange={(o) => { setMergeOpen(o ? r.userid : null); setMergeTarget(""); setMergePreferSourceName(true) }}>
-                      <DialogTrigger asChild>
-                        <button className="inline-flex items-center gap-1 text-emerald-700 hover:text-emerald-800 px-2 py-1 text-sm" title="Merge into target user">
-                          <GitMerge className="h-4 w-4" />
-                          <span className="hidden sm:inline">Merge</span>
-                        </button>
-                      </DialogTrigger>
-                      <DialogContent>
-                        <DialogHeader>
-                          <DialogTitle>Merge Pengguna</DialogTitle>
-                        </DialogHeader>
-                        <form
-                          onSubmit={(e) => { e.preventDefault(); handleMerge(r.userid) }}
-                          className="grid gap-3"
-                        >
-                          <p className="text-sm text-gray-600">Gabungkan data dari
-                            <span className="font-mono"> {truncateId(r.userid)} </span>
-                            ke userid tujuan berikut. Semua aktivitas akan dipindahkan ke userid tujuan. Profil sumber akan dihapus.
-                          </p>
-                          <div className="grid gap-1 text-sm">
-                            <span>Target User ID</span>
-                            <input
-                              value={mergeTarget}
-                              onChange={(e) => setMergeTarget(e.target.value)}
-                              placeholder="contoh: eca885ad-…"
-                              className="border rounded-md px-3 py-2 font-mono"
-                              required
-                            />
-                          </div>
-                          <label className="flex items-center gap-2 text-sm">
-                            <input
-                              type="checkbox"
-                              checked={mergePreferSourceName}
-                              onChange={(e) => setMergePreferSourceName(e.target.checked)}
-                            />
-                            <span>Utamakan nama dari sumber (mis. "Raditya Alfarisi")</span>
-                          </label>
-                          <DialogFooter>
-                            <DialogClose asChild>
-                              <button type="button" className="px-3 py-2 rounded-md border text-sm">Cancel</button>
-                            </DialogClose>
-                            <button type="submit" className="bg-emerald-600 text-white px-3 py-2 rounded-md text-sm hover:bg-emerald-700">Merge</button>
-                          </DialogFooter>
-                        </form>
-                      </DialogContent>
-                    </Dialog>
                     <Dialog open={editOpen === r.userid} onOpenChange={(o) => setEditOpen(o ? r.userid : null)}>
                       <DialogTrigger asChild>
                         <button className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700 px-2 py-1 text-sm">
@@ -534,9 +506,23 @@ export default function UsersTable() {
                         <form
                           onSubmit={async (e) => {
                             e.preventDefault()
-                            const fd = new FormData(e.currentTarget as HTMLFormElement)
                             
-                            if (r.roleid === 5) {
+                            const currentRole = Number(editForm.roleid) || r.roleid
+                            
+                            // Handle password update first if provided
+                            if (editForm.password && editForm.password.trim().length > 0) {
+                              if (editForm.password.length < 6) {
+                                setError("Password harus minimal 6 karakter")
+                                return
+                              }
+                              
+                              const passwordUpdated = await handlePasswordUpdate(r.userid, editForm.password.trim())
+                              if (!passwordUpdated) {
+                                return // Error already set in handlePasswordUpdate
+                              }
+                            }
+                            
+                            if (currentRole === 5) {
                               // For students, handle parent-student relationship
                               const currentParent = parents.find(p => p.parent_of_userid === r.userid)
                               const newParentId = editParentValue || null
@@ -553,19 +539,19 @@ export default function UsersTable() {
                               
                               // Update student basic info
                               const studentPayload: Partial<UserProfile> = {
-                                username: String(fd.get("username") || ""),
-                                email: String(fd.get("email") || "").trim() || null,
-                                roleid: fd.get("roleid") ? Number(fd.get("roleid")) : null,
-                                kelas: (String(fd.get("kelas") || "").trim() || null) as any,
+                                username: editForm.username || "",
+                                email: editForm.email.trim() || null,
+                                roleid: Number(editForm.roleid) || null,
+                                kelas: (editForm.kelas.trim() || null) as any,
                               }
                               handleUpdate(r.userid, studentPayload)
                             } else {
                               // For non-students, use original logic
                               const payload: Partial<UserProfile> = {
-                                username: String(fd.get("username") || ""),
-                                email: String(fd.get("email") || "").trim() || null,
-                                roleid: fd.get("roleid") ? Number(fd.get("roleid")) : null,
-                                kelas: (String(fd.get("kelas") || "").trim() || null) as any,
+                                username: editForm.username || "",
+                                email: editForm.email.trim() || null,
+                                roleid: Number(editForm.roleid) || null,
+                                kelas: (editForm.kelas.trim() || null) as any,
                                 parent_of_userid: editParentValue || null,
                               }
                               handleUpdate(r.userid, payload)
@@ -575,22 +561,83 @@ export default function UsersTable() {
                         >
                           <div className="grid gap-1 text-sm">
                             <span>Username</span>
-                            <input name="username" defaultValue={r.username ?? ""} className="border rounded-md px-3 py-2" />
+                            <input 
+                              name="username" 
+                              value={editForm.username}
+                              onChange={(e) => setEditForm(s => ({ ...s, username: e.target.value }))}
+                              className="border rounded-md px-3 py-2" 
+                            />
                           </div>
                           <div className="grid gap-1 text-sm">
                             <span>Email</span>
-                            <input name="email" type="email" defaultValue={r.email ?? ""} className="border rounded-md px-3 py-2" />
+                            <input 
+                              name="email" 
+                              type="email" 
+                              value={editForm.email}
+                              onChange={(e) => setEditForm(s => ({ ...s, email: e.target.value }))}
+                              className="border rounded-md px-3 py-2" 
+                            />
                           </div>
                           <div className="grid gap-1 text-sm">
-                            <span>Role ID</span>
-                            <input name="roleid" type="number" defaultValue={r.roleid ?? undefined} className="border rounded-md px-3 py-2" />
+                            <span>Role</span>
+                            <select
+                              value={editForm.roleid}
+                              onChange={(e) => setEditForm(s => ({ ...s, roleid: e.target.value }))}
+                              required
+                              className="border rounded-md px-3 py-2 bg-white"
+                            >
+                              <option value="">Pilih role...</option>
+                              {roles.filter(role => role.roleid !== 1).map((role) => (
+                                <option key={role.roleid} value={role.roleid.toString()}>
+                                  {role.rolename}
+                                </option>
+                              ))}
+                            </select>
                           </div>
                           <div className="grid gap-1 text-sm">
                             <span>Kelas</span>
-                            <input name="kelas" defaultValue={r.kelas ?? ""} className="border rounded-md px-3 py-2" />
+                            <input 
+                              name="kelas" 
+                              value={editForm.kelas}
+                              onChange={(e) => setEditForm(s => ({ ...s, kelas: e.target.value }))}
+                              className="border rounded-md px-3 py-2" 
+                            />
+                          </div>
+                          {/* Password field with show/hide toggle */}
+                          <div className="grid gap-1 text-sm">
+                            <span>Password Baru (opsional)</span>
+                            <div className="relative">
+                              <input 
+                                name="password" 
+                                type={showEditPassword ? "text" : "password"}
+                                value={editForm.password}
+                                onChange={(e) => setEditForm(s => ({ ...s, password: e.target.value }))}
+                                placeholder="Kosongkan jika tidak ingin mengubah password"
+                                className="border rounded-md px-3 py-2 pr-10 w-full"
+                              />
+                              {editForm.password && (
+                                <button
+                                  type="button"
+                                  onClick={() => setShowEditPassword(!showEditPassword)}
+                                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700 focus:outline-none"
+                                >
+                                  {showEditPassword ? (
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.878 9.878L3 3m6.878 6.878L21 21" />
+                                    </svg>
+                                  ) : (
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.543 7-1.275 4.057-5.065 7-9.543 7-4.477 0-8.268-2.943-9.542-7z" />
+                                    </svg>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                            <p className="text-xs text-gray-500">Minimal 6 karakter. Kosongkan jika tidak ingin mengubah.</p>
                           </div>
                           {/* Parent selection - Show when editing student (role 5) */}
-                          {r.roleid === 5 && (
+                          {Number(editForm.roleid) === 5 && (
                             <div className="grid gap-1 text-sm">
                               <span>Dipantau oleh Orang Tua</span>
                               <select 

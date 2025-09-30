@@ -1,5 +1,10 @@
 "use client"
 
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Skeleton } from "@/components/ui/skeleton"
 import Link from "next/link"
 import { useParams, useRouter } from "next/navigation"
 import * as React from "react"
@@ -10,6 +15,7 @@ type Field = {
   type: "text" | "time" | "image" | "text_image" | "multiselect"
   required?: boolean
   config?: any
+  order?: number
 }
 
 type Category = {
@@ -18,9 +24,89 @@ type Category = {
   inputs?: Field[]
 }
 
+type SubmissionStatus = {
+  canSubmit: boolean
+  lastSubmittedAt: string | null
+}
+
 type KegiatanDetail = {
   kegiatanname: string
   categories: Category[]
+  submissionStatus?: SubmissionStatus
+}
+
+const ALLOWED_FIELD_TYPES: Field["type"][] = ["text", "time", "image", "text_image", "multiselect"]
+
+function normalizeFieldType(value: any): Field["type"] {
+  const next = typeof value === "string" ? value.trim().toLowerCase() : ""
+  return (ALLOWED_FIELD_TYPES as string[]).includes(next) ? (next as Field["type"]) : "text"
+}
+
+function coerceArray(raw: any): any[] {
+  if (Array.isArray(raw)) return raw
+  if (typeof raw === "string") {
+    try {
+      const parsed = JSON.parse(raw)
+      if (Array.isArray(parsed)) return parsed
+      if (parsed && typeof parsed === "object") return Object.values(parsed)
+    } catch {
+      return []
+    }
+  }
+  if (raw && typeof raw === "object") {
+    if (Array.isArray(raw.data)) return raw.data
+    const values = Object.values(raw)
+    if (values.every((item) => item && typeof item === "object")) return values
+  }
+  return []
+}
+
+function normalizeFields(raw: any): Field[] {
+  const acc: Field[] = []
+  coerceArray(raw).forEach((item: any, index: number) => {
+    const key = typeof item?.key === "string" ? item.key : null
+    if (!key) return
+    const label = typeof item?.label === "string" ? item.label : ""
+    const type = normalizeFieldType(item?.type)
+    const config = item?.config && typeof item.config === "object" ? item.config : undefined
+    acc.push({
+      key,
+      label,
+      type,
+      required: !!item?.required,
+      order: Number.isFinite(item?.order) ? Number(item.order) : index,
+      config,
+    })
+  })
+  return acc.sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
+}
+
+function normalizeCategories(raw: any): Category[] {
+  if (!Array.isArray(raw)) return []
+  const result: Category[] = []
+  raw.forEach((cat: any) => {
+    const rawId = cat?.categoryid
+    const categoryid = typeof rawId === "string" ? rawId : rawId != null ? String(rawId) : ""
+    if (!categoryid) return
+    result.push({
+      categoryid,
+      categoryname: typeof cat?.categoryname === "string" ? cat.categoryname : "",
+      inputs: normalizeFields(cat?.inputs),
+    })
+  })
+  return result
+}
+
+function resolveOptions(field: Field): string[] {
+  const raw = field?.config?.options
+  if (Array.isArray(raw)) return raw.map((opt) => String(opt))
+  if (typeof raw === "string") {
+    return raw
+      .split(/\r?\n|,/)
+      .map((opt) => opt.trim())
+      .filter(Boolean)
+  }
+  return []
 }
 
 export default function SiswaKegiatanDetail() {
@@ -37,6 +123,10 @@ export default function SiswaKegiatanDetail() {
   const [submitting, setSubmitting] = React.useState(false)
   const [submitError, setSubmitError] = React.useState<string | null>(null)
   const [submitSuccess, setSubmitSuccess] = React.useState<string | null>(null)
+  const locked = data?.submissionStatus?.canSubmit === false
+  const lastSubmitted = data?.submissionStatus?.lastSubmittedAt
+    ? new Date(data.submissionStatus.lastSubmittedAt).toLocaleString("id-ID")
+    : null
 
   React.useEffect(() => {
     let active = true
@@ -50,14 +140,25 @@ export default function SiswaKegiatanDetail() {
       setError(null)
       try {
         const res = await fetch(`/api/kegiatan/${kegiatanid}`, { cache: "no-store" })
-        if (!res.ok) throw new Error(`Gagal memuat data (${res.status})`)
-        const json = await res.json()
+        const json = await res.json().catch(() => ({}))
+        if (!res.ok) {
+          throw new Error(json?.error || `Gagal memuat data (${res.status})`)
+        }
         const payload: KegiatanDetail | undefined = json?.data ?? json
         if (!payload) throw new Error("Data tidak ditemukan")
         if (active) {
-          setData({ kegiatanname: payload.kegiatanname, categories: payload.categories || [] })
+          const submissionStatus: SubmissionStatus = payload.submissionStatus ?? {
+            canSubmit: true,
+            lastSubmittedAt: null,
+          }
+          const normalizedCategories = normalizeCategories(payload.categories)
+          setData({
+            kegiatanname: typeof payload.kegiatanname === "string" ? payload.kegiatanname : "",
+            categories: normalizedCategories,
+            submissionStatus,
+          })
           const seed: Record<string, Record<string, any>> = {}
-          for (const c of payload.categories || []) seed[c.categoryid] = {}
+          for (const c of normalizedCategories) seed[c.categoryid] = {}
           setValues(seed)
         }
       } catch (e: any) {
@@ -72,6 +173,7 @@ export default function SiswaKegiatanDetail() {
   }, [kegiatanid])
 
   const setFieldValue = (categoryid: string, key: string, val: any) => {
+    if (locked) return
     setValues((prev) => ({
       ...prev,
       [categoryid]: {
@@ -104,6 +206,10 @@ export default function SiswaKegiatanDetail() {
     e.preventDefault()
     setSubmitError(null)
     setSubmitSuccess(null)
+    if (locked) {
+      setSubmitError("Kamu sudah mengirim aktivitas hari ini. Coba lagi besok.")
+      return
+    }
     const invalid = validateRequired()
     if (invalid) {
       setSubmitError(invalid)
@@ -152,6 +258,21 @@ export default function SiswaKegiatanDetail() {
         body: fd,
       })
       const json = await res.json()
+      if (res.status === 409) {
+        setSubmitError(json?.error || "Kamu sudah mengirim aktivitas hari ini. Coba lagi besok.")
+        setData((prev) =>
+          prev
+            ? {
+                ...prev,
+                submissionStatus: {
+                  canSubmit: false,
+                  lastSubmittedAt: json?.last_submission ?? prev.submissionStatus?.lastSubmittedAt ?? null,
+                },
+              }
+            : prev
+        )
+        return
+      }
       if (!res.ok) throw new Error(json?.error || "Gagal menyimpan aktivitas")
       setSubmitSuccess("Aktivitas berhasil dikirim.")
       setTimeout(() => router.push("/siswa"), 900)
@@ -165,198 +286,306 @@ export default function SiswaKegiatanDetail() {
   const renderField = (c: Category, f: Field) => {
     const fieldId = `${c.categoryid}-${f.key}`
     const v = values?.[c.categoryid]?.[f.key]
-    const common =
-      "block w-full border rounded-md px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 focus:outline-none"
+    const disabled = locked || submitting
+
+    const inputClass = "h-11 rounded-lg border-emerald-100 bg-white/80 text-sm focus-visible:border-emerald-400 focus-visible:ring-emerald-200 disabled:bg-slate-100 disabled:text-slate-500"
 
     switch (f.type) {
       case "text":
         return (
-          <input
+          <Input
             id={fieldId}
             type="text"
-            className={common}
+            className={inputClass}
             required={f.required}
             value={v ?? ""}
+            disabled={disabled}
             onChange={(e) => setFieldValue(c.categoryid, f.key, e.target.value)}
             placeholder={f.label}
           />
         )
       case "time":
         return (
-          <input
+          <Input
             id={fieldId}
             type="time"
-            className={common}
+            className={inputClass}
             required={f.required}
             value={v ?? ""}
+            disabled={disabled}
             onChange={(e) => setFieldValue(c.categoryid, f.key, e.target.value)}
           />
         )
       case "multiselect": {
-        const opts: string[] = Array.isArray(f?.config?.options) ? f.config.options : []
+        const opts = resolveOptions(f)
         const selected: string[] = Array.isArray(v) ? v : []
         return (
-          <div className="flex flex-col gap-1" id={fieldId}>
-            {opts.map((o) => {
-              const checked = selected.includes(o)
-              return (
-                <label key={o} className="inline-flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4"
-                    checked={checked}
-                    onChange={(e) => {
-                      const next = new Set(selected)
-                      if (e.target.checked) next.add(o)
-                      else next.delete(o)
-                      setFieldValue(c.categoryid, f.key, Array.from(next))
-                    }}
-                  />
-                  <span>{o}</span>
-                </label>
-              )
-            })}
+          <div
+            id={fieldId}
+            className="rounded-xl border border-dashed border-emerald-100 bg-white/70 p-3 text-sm text-slate-600"
+          >
+            <div className="flex flex-wrap gap-2">
+              {opts.length === 0 && <span className="text-xs text-slate-500">Belum ada opsi.</span>}
+              {opts.map((o) => {
+                const checked = selected.includes(o)
+                return (
+                  <label
+                    key={o}
+                    className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 transition ${
+                      checked
+                        ? "border-emerald-300 bg-emerald-100 text-emerald-700"
+                        : "border-slate-200 bg-white/80 text-slate-600"
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4 rounded border-emerald-200 text-emerald-600"
+                      checked={checked}
+                      disabled={disabled}
+                      onChange={(e) => {
+                        const next = new Set(selected)
+                        if (e.target.checked) next.add(o)
+                        else next.delete(o)
+                        setFieldValue(c.categoryid, f.key, Array.from(next))
+                      }}
+                    />
+                    <span>{o}</span>
+                  </label>
+                )
+              })}
+            </div>
           </div>
         )
       }
       case "image":
         return (
-          <input
-            id={fieldId}
-            type="file"
-            accept={f?.config?.accept || "image/*"}
-            className="block w-full text-sm file:mr-3 file:py-2 file:px-3 file:rounded-md file:border file:text-sm file:bg-gray-100 file:hover:bg-gray-200"
-            onChange={(e) => setFieldValue(c.categoryid, f.key, e.target.files?.[0] || null)}
-          />
+          <div className="rounded-xl border border-dashed border-emerald-100 bg-white/70 p-3">
+            <input
+              id={fieldId}
+              type="file"
+              accept={f?.config?.accept || "image/*"}
+              className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-100/80 file:px-4 file:py-2 file:font-medium file:text-emerald-700 hover:file:bg-emerald-100"
+              disabled={disabled}
+              onChange={(e) => setFieldValue(c.categoryid, f.key, e.target.files?.[0] || null)}
+            />
+          </div>
         )
       case "text_image":
         return (
-          <div className="space-y-2">
-            <input
+          <div className="space-y-3">
+            <Input
               id={fieldId}
               type="text"
-              className={common}
+              className={inputClass}
               placeholder={f.label}
               value={v?.text ?? ""}
+              disabled={disabled}
               onChange={(e) =>
                 setFieldValue(c.categoryid, f.key, { ...(v || {}), text: e.target.value })
               }
             />
-            <input
-              type="file"
-              accept={f?.config?.accept || "image/*"}
-              className="block w-full text-sm file:mr-3 file:py-2 file:px-3 file:rounded-md file:border file:text-sm file:bg-gray-100 file:hover:bg-gray-200"
-              onChange={(e) =>
-                setFieldValue(c.categoryid, f.key, { ...(v || {}), image: e.target.files?.[0] || null })
-              }
-            />
+            <div className="rounded-xl border border-dashed border-emerald-100 bg-white/70 p-3">
+              <input
+                type="file"
+                accept={f?.config?.accept || "image/*"}
+                className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-100/80 file:px-4 file:py-2 file:font-medium file:text-emerald-700 hover:file:bg-emerald-100"
+                disabled={disabled}
+                onChange={(e) =>
+                  setFieldValue(c.categoryid, f.key, {
+                    ...(v || {}),
+                    image: e.target.files?.[0] || null,
+                  })
+                }
+              />
+            </div>
           </div>
         )
       default:
         return (
-          <input
+          <Input
             id={fieldId}
             type="text"
-            className={common}
+            className={inputClass}
             value={v ?? ""}
+            disabled={disabled}
             onChange={(e) => setFieldValue(c.categoryid, f.key, e.target.value)}
           />
         )
     }
   }
 
+  const summary = React.useMemo(
+    () => {
+      if (!data) return { categoryCount: 0, requiredCount: 0, fieldCount: 0 }
+      return data.categories.reduce(
+        (acc, cat) => {
+          acc.categoryCount += 1
+          const fields = cat.inputs || []
+          acc.fieldCount += fields.length
+          acc.requiredCount += fields.filter((f) => f.required).length
+          return acc
+        },
+        { categoryCount: 0, requiredCount: 0, fieldCount: 0 }
+      )
+    },
+    [data]
+  )
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="max-w-4xl mx-auto px-4 py-6">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-xl font-semibold">{data?.kegiatanname || "Detail Kegiatan"}</h1>
-            <p className="text-sm text-gray-500">Isi aktivitasmu sesuai kategori yang tersedia.</p>
-          </div>
-          <Link href="/siswa" className="text-sm text-emerald-700 hover:underline">
-            &larr; Kembali
-          </Link>
-        </div>
+    <div className="relative min-h-screen overflow-hidden bg-gradient-to-br from-emerald-50 via-white to-sky-50">
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-[-45%] h-[540px] rounded-full bg-[radial-gradient(circle_at_top,_rgba(16,185,129,0.2),transparent_60%)]"
+      />
+      <div className="relative mx-auto flex w-full max-w-5xl flex-col gap-6 px-5 py-10">
+        <Card className="border-emerald-100/70 bg-white/85 shadow-xl shadow-emerald-100/50 backdrop-blur">
+          <CardHeader className="flex flex-col gap-4 border-b border-emerald-50/60 pb-6 md:flex-row md:items-start md:justify-between">
+            <div className="space-y-2">
+              <CardTitle className="text-2xl text-slate-900">{data?.kegiatanname || "Detail Kegiatan"}</CardTitle>
+              <p className="max-w-2xl text-sm text-slate-600">
+                Isi aktivitasmu sesuai kategori yang tersedia. Pastikan semua kolom wajib sudah terlengkapi sebelum dikirim.
+              </p>
+              {lastSubmitted && (
+                <p className="text-xs text-slate-600">Terakhir mengirim: {lastSubmitted}</p>
+              )}
+            </div>
+            <div className="flex flex-col items-end gap-3 md:items-stretch">
+              <Badge
+                className={
+                  locked
+                    ? "border border-amber-200 bg-amber-100 text-amber-800"
+                    : "border border-emerald-200 bg-emerald-100 text-emerald-800"
+                }
+              >
+                {locked ? "Sudah mengirim hari ini" : "Siap untuk dikumpulkan"}
+              </Badge>
+              <Button variant="ghost" size="sm" asChild className="justify-end text-emerald-600 hover:text-emerald-700">
+                <Link href="/siswa">&larr; Kembali ke daftar</Link>
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent className="flex flex-wrap gap-3 py-5 text-xs text-slate-600">
+            <Badge className="border border-emerald-100 bg-white/70 text-emerald-800">
+              {summary.categoryCount} kategori
+            </Badge>
+            <Badge className="border border-emerald-100 bg-white/70 text-emerald-800">
+              {summary.fieldCount} kolom
+            </Badge>
+            <Badge className="border border-emerald-100 bg-emerald-50 text-emerald-700">
+              {summary.requiredCount} wajib diisi
+            </Badge>
+          </CardContent>
+        </Card>
 
         {loading && (
-          <div className="space-y-3">
-            <div className="h-24 bg-white rounded-lg border animate-pulse" />
-            <div className="h-24 bg-white rounded-lg border animate-pulse" />
+          <div className="grid gap-4 md:grid-cols-2">
+            <Skeleton className="h-40 rounded-2xl border border-emerald-100/60 bg-white/60" />
+            <Skeleton className="h-40 rounded-2xl border border-emerald-100/60 bg-white/60" />
+            <Skeleton className="h-40 rounded-2xl border border-emerald-100/60 bg-white/60" />
           </div>
         )}
+
         {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded mb-4 text-sm">
-            {error}
-          </div>
+          <Card className="border-red-200 bg-red-50/90 text-red-700">
+            <CardContent className="py-5 text-sm">{error}</CardContent>
+          </Card>
         )}
 
         {!loading && !error && data && (
           <form onSubmit={onSubmit} className="space-y-6">
+            {locked && (
+                  <Card className="border-amber-200 bg-amber-50/90 text-amber-800">
+                <CardContent className="space-y-1 py-4 text-sm">
+                  <p className="font-medium">Pengiriman harian sudah dilakukan.</p>
+                  <p className="text-xs">
+                    Kamu sudah mengirim aktivitas untuk kegiatan ini hari ini{lastSubmitted ? ` (terakhir ${lastSubmitted})` : ""}. Silakan coba lagi besok.
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
             {data.categories?.length ? (
               data.categories.map((c) => (
-                <div key={c.categoryid} className="bg-white rounded-lg border shadow-sm">
-                  <div className="px-4 py-3 border-b flex items-center justify-between">
-                    <h2 className="font-medium">{c.categoryname}</h2>
-                    <span className="text-xs text-gray-500">
+                <Card key={c.categoryid} className="border-emerald-100/70 bg-white/80 shadow-sm">
+                  <CardHeader className="flex flex-col gap-2 border-b border-emerald-50/70 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                    <CardTitle className="text-lg text-slate-900">{c.categoryname}</CardTitle>
+                    <Badge className="border border-emerald-100 bg-emerald-50 text-emerald-700">
                       {(c.inputs?.filter((f) => f.required).length || 0)} wajib diisi
-                    </span>
-                  </div>
-                  <div className="p-4 space-y-4">
+                    </Badge>
+                  </CardHeader>
+                  <CardContent className="space-y-5 py-5">
                     {(c.inputs || []).length === 0 ? (
-                      <p className="text-sm text-gray-500">Tidak ada field untuk kategori ini.</p>
+                      <p className="text-sm text-slate-600">Tidak ada field untuk kategori ini.</p>
                     ) : (
                       (c.inputs || []).map((f) => (
-                        <div key={f.key} className="space-y-1">
-                          <label htmlFor={`${c.categoryid}-${f.key}`} className="text-sm font-medium">
-                            {f.label}
-                            {f.required ? <span className="text-red-600"> *</span> : null}
-                          </label>
+                        <div key={f.key} className="space-y-3 rounded-2xl border border-slate-100 bg-white/70 p-4 shadow-inner">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                            <label
+                              htmlFor={`${c.categoryid}-${f.key}`}
+                              className="text-sm font-medium text-slate-700"
+                            >
+                              {f.label}
+                            </label>
+                            {f.required && (
+                              <Badge className="border border-rose-100 bg-rose-50 text-rose-600">Wajib</Badge>
+                            )}
+                          </div>
                           {renderField(c, f)}
-                          <p className="text-[11px] text-gray-500">
+                          <p className="text-[11px] text-slate-500">
                             {f.type === "multiselect"
                               ? "Bisa memilih lebih dari satu opsi."
                               : f.type === "image" || f.type === "text_image"
                               ? "File gambar akan dikirim dan disimpan di database."
-                              : ""}
+                              : "Masukkan jawaban terbaikmu."}
                           </p>
                         </div>
                       ))
                     )}
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               ))
             ) : (
-              <div className="bg-white border rounded p-4 text-sm text-gray-600">
-                Belum ada kategori untuk kegiatan ini.
-              </div>
+              <Card className="border-dashed border-slate-200 bg-white/80">
+                <CardContent className="py-8 text-center text-sm text-slate-500">
+                  Belum ada kategori untuk kegiatan ini.
+                </CardContent>
+              </Card>
             )}
 
             {submitError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 p-3 rounded text-sm">{submitError}</div>
+              <Card className="border-red-200 bg-red-50/90 text-red-700">
+                <CardContent className="py-4 text-sm">{submitError}</CardContent>
+              </Card>
             )}
             {submitSuccess && (
-              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 p-3 rounded text-sm">
-                {submitSuccess}
-              </div>
+              <Card className="border-emerald-200 bg-emerald-50/90 text-emerald-700">
+                <CardContent className="py-4 text-sm">{submitSuccess}</CardContent>
+              </Card>
             )}
 
-            <div className="sticky bottom-4 flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={submitting}
-                className={`inline-flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium text-white ${
-                  submitting ? "bg-emerald-300" : "bg-emerald-600 hover:bg-emerald-700"
-                }`}
-              >
-                {submitting ? "Mengirim…" : "Kirim Aktivitas"}
-              </button>
-              <button
-                type="button"
-                onClick={() => router.push("/siswa")}
-                className="inline-flex items-center justify-center px-4 py-2 rounded-md text-sm font-medium border"
-              >
-                Batal
-              </button>
+            <div className="sticky bottom-6 z-10 flex flex-col gap-3 rounded-2xl border border-emerald-100/70 bg-white/90 p-4 shadow-xl backdrop-blur md:flex-row md:items-center md:justify-between">
+              <div className="text-xs text-slate-600">
+                {locked
+                  ? "Kamu perlu menunggu hingga esok hari untuk mengisi kembali."
+                  : "Pastikan seluruh kolom wajib sudah terisi sebelum menekan tombol kirim."}
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <Button
+                  type="submit"
+                  disabled={submitting || locked}
+                  className="bg-emerald-600 px-6 text-sm font-medium shadow-md hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
+                >
+                  {submitting ? "Mengirim…" : "Kirim Aktivitas"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => router.push("/siswa")}
+                  className="text-sm"
+                >
+                  Batal
+                </Button>
+              </div>
             </div>
           </form>
         )}

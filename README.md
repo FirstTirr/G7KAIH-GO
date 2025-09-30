@@ -29,8 +29,37 @@ To learn more about Next.js, take a look at the following resources:
 
 You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
 
-## Deploy on Vercel
+## Testing
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+This project ships with [Vitest](https://vitest.dev) and [React Testing Library](https://testing-library.com/docs/react-testing-library/intro/) for fast, component-focused tests.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Install dependencies (only required once):
+
+```bash
+bun install
+```
+
+Run the full test suite:
+
+```bash
+bun run test
+```
+
+For an interactive watch mode during development:
+
+```bash
+bun run test:watch
+```
+
+Coverage reports are emitted to the console (`text`) and `coverage/` (`lcov`) by default.
+
+### API route tests
+
+- `src/app/api/__tests__/route-exports.test.ts` loads every `route.ts` module under `src/app/api` to ensure each exports at least one HTTP method handler.
+- `src/app/api/submission-window/__tests__/submission-window.test.ts` demonstrates mocking Supabase and exercising the route logic for different authorization and validation branches. Use it as a template when adding behavioral tests for other endpoints.
+
+### Feature UI tests
+
+- `src/app/login/__tests__/login.test.tsx` covers rendering, password visibility toggling, and reCAPTCHA validation flows for the login experience.
+- `src/app/(user)/siswa/__tests__/page.test.tsx` simulates submission window states and data loading for the student dashboard, including error and empty scenarios.
+- `src/app/tos/__tests__/tos.test.tsx` and `src/app/error/__tests__/error.test.tsx` provide content smoke tests ensuring static pages remain stable.

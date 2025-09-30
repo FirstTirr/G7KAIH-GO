@@ -5,8 +5,8 @@ import { StudentActivities } from "@/components/orangtua/StudentActivities"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import LogoutButton from "@/components/ui/logoutButton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useCurrentUser } from "@/hooks/use-current-user"
 import { Activity, GraduationCap, MessageCircle, User } from "lucide-react"
 import { useEffect, useState } from "react"
@@ -89,6 +89,12 @@ export default function OrangTuaPage() {
       fetchParentStudentData()
     }
   }, [currentUserId])
+
+  useEffect(() => {
+    if (!userLoading && !currentUserId) {
+      setLoading(false)
+    }
+  }, [userLoading, currentUserId])
 
   if (userLoading || loading) {
     return (

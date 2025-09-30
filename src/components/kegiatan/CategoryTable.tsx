@@ -73,7 +73,11 @@ export default function CategoryTable() {
     const res = await fetch("/api/category", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ categoryname: value, inputs: inputsPayload }),
+      body: JSON.stringify({
+        categoryname: value,
+        inputs: inputsPayload,
+        autoAttachAllKegiatan: true,
+      }),
     })
     if (!res.ok) {
       const json = await res.json().catch(() => ({}))
@@ -248,6 +252,9 @@ export default function CategoryTable() {
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Contoh: Kebersihan"
               />
+              <p className="text-[11px] text-gray-500 mt-1">
+                Kategori baru otomatis tersedia di semua kegiatan yang ada.
+              </p>
               <div className="mt-3">
                 <button
                   type="button"

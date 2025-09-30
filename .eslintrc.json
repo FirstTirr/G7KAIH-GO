@@ -1,0 +1,22 @@
+{
+  "extends": ["next/core-web-vitals", "next/typescript"],
+  "rules": {
+    "@next/next/no-img-element": "off",
+    "@typescript-eslint/no-explicit-any": "off",
+    "@typescript-eslint/no-this-alias": "off",
+  "@typescript-eslint/no-unused-vars": "off",
+    "jsx-a11y/alt-text": "off",
+  "prefer-const": "off",
+  "react-hooks/exhaustive-deps": "off",
+  "react-hooks/rules-of-hooks": "off",
+    "react/no-unescaped-entities": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/__tests__/**/*", "**/*.test.ts", "**/*.test.tsx"],
+      "rules": {
+        "react-hooks/rules-of-hooks": "off"
+      }
+    }
+  ]
+}

@@ -50,9 +50,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { categoryname, inputs } = (await request.json()) as {
+    const { categoryname, inputs, kegiatanIds, autoAttachAllKegiatan } = (await request.json()) as {
       categoryname?: string
       inputs?: any
+      kegiatanIds?: string[] | null
+      autoAttachAllKegiatan?: boolean
     }
     if (!categoryname || !categoryname.trim()) {
       return NextResponse.json(
@@ -61,7 +63,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = await createClient()
+  const supabase = await createClient()
     const name = categoryname.trim()
     // Check duplicate by exact name
     const { data: existsData, error: existsErr } = await supabase
@@ -105,6 +107,39 @@ export async function POST(request: NextRequest) {
       }))
       const { error: cfErr } = await supabase.from("category_fields").insert(rows)
       if (cfErr) throw cfErr
+    }
+
+    // Auto attach to kegiatan if requested (default: attach to all existing)
+    const explicitIds = Array.isArray(kegiatanIds)
+      ? Array.from(
+          new Set(
+            kegiatanIds
+              .map((id) => (typeof id === "string" ? id.trim() : ""))
+              .filter((id) => id.length > 0)
+          )
+        )
+      : []
+    let targetKegiatanIds = [...explicitIds]
+    if (targetKegiatanIds.length === 0 && autoAttachAllKegiatan !== false) {
+      const { data: kegiatanList, error: kegErr } = await supabase
+        .from("kegiatan")
+        .select("kegiatanid")
+      if (kegErr && !String(kegErr.message || "").includes("does not exist")) {
+        throw kegErr
+      }
+      if (Array.isArray(kegiatanList)) {
+        targetKegiatanIds = kegiatanList
+          .map((k: any) => k?.kegiatanid)
+          .filter((id: any): id is string => typeof id === "string" && id.length > 0)
+      }
+    }
+
+    if (targetKegiatanIds.length > 0) {
+      const rows = targetKegiatanIds.map((kegiatanid) => ({ kegiatanid, categoryid: cat.categoryid }))
+      const { error: linkErr } = await supabase.from("kegiatan_categories").upsert(rows)
+      if (linkErr && !String(linkErr.message || "").includes("does not exist")) {
+        throw linkErr
+      }
     }
 
     // Return with mapped inputs

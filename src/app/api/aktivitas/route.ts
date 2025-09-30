@@ -2,6 +2,17 @@ import { uploadToCloudinary } from "@/utils/cloudinary"
 import { createClient } from "@/utils/supabase/server"
 import { NextResponse } from "next/server"
 
+const JAKARTA_TZ = "Asia/Jakarta"
+
+function todayInJakarta(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: JAKARTA_TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date())
+}
+
 export async function GET() {
   try {
     const supabase = await createClient()
@@ -105,6 +116,30 @@ export async function POST(request: Request) {
     const userid = auth.user?.id
     if (!userid) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
+    // Guard: allow only one submission per kegiatan per user per day
+  const today = todayInJakarta() // YYYY-MM-DD in Asia/Jakarta
+    const { data: existingToday, error: existingErr } = await supabase
+      .from("aktivitas")
+      .select("activityid, created_at")
+      .eq("kegiatanid", kegiatanid)
+      .eq("userid", userid)
+      .eq("submitted_date", today)
+      .maybeSingle()
+
+    if (existingErr && existingErr.code !== "PGRST116") {
+      throw existingErr
+    }
+
+    if (existingToday) {
+      return NextResponse.json(
+        {
+          error: "Kamu sudah mengirim aktivitas untuk kegiatan ini hari ini. Silakan coba lagi besok.",
+          last_submission: existingToday.created_at,
+        },
+        { status: 409 }
+      )
+    }
+
     // Ensure kegiatan exists (also get name for default title)
     const { data: keg, error: kegErr } = await supabase
       .from("kegiatan")
@@ -134,7 +169,15 @@ export async function POST(request: Request) {
       .insert(insertRow)
       .select("activityid")
       .single()
-    if (actErr) throw actErr
+    if (actErr) {
+      if ((actErr as any)?.code === "23505") {
+        return NextResponse.json(
+          { error: "Kamu sudah mengirim aktivitas untuk kegiatan ini hari ini. Silakan coba lagi besok." },
+          { status: 409 }
+        )
+      }
+      throw actErr
+    }
 
     const activityid = act.activityid as string
 

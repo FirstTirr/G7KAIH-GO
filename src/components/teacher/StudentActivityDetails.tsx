@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { useCurrentUser } from "@/hooks/use-current-user"
 import { ArrowLeft, Calendar, CheckCircle, Clock, Eye, ShieldCheck, XCircle } from "lucide-react"
+import { usePathname } from "next/navigation"
 import * as React from "react"
 
 type FieldValue = {
@@ -255,8 +256,12 @@ export function StudentActivityDetails({
   onRefresh?: () => void
 }) {
   const { userId: currentUserId } = useCurrentUser()
+  const pathname = usePathname()
   const [validatingFieldId, setValidatingFieldId] = React.useState<string | null>(null)
   const [activities, setActivities] = React.useState<Activity[]>(initialActivities)
+
+  // Determine if validation buttons should be shown (not for guruwali)
+  const showValidationButtons = !pathname.startsWith('/guruwali')
 
   // Update local activities when prop changes
   React.useEffect(() => {
@@ -438,27 +443,29 @@ export function StudentActivityDetails({
                                       <IconComponent className={`h-3 w-3 mr-1 ${validationStatus.color}`} />
                                       {validationStatus.text}
                                     </Badge>
-                                    <Button
-                                      size="sm"
-                                      variant={fieldValue.validation.byTeacher ? "default" : "outline"}
-                                      onClick={() => handleValidationToggle(fieldValue)}
-                                      disabled={validatingFieldId === fieldValue.id}
-                                      className="text-xs"
-                                    >
-                                      {validatingFieldId === fieldValue.id ? (
-                                        "Loading..."
-                                      ) : fieldValue.validation.byTeacher ? (
-                                        <>
-                                          <CheckCircle className="h-3 w-3 mr-1" />
-                                          Tervalidasi
-                                        </>
-                                      ) : (
-                                        <>
-                                          <XCircle className="h-3 w-3 mr-1" />
-                                          Validasi
-                                        </>
-                                      )}
-                                    </Button>
+                                    {showValidationButtons && (
+                                      <Button
+                                        size="sm"
+                                        variant={fieldValue.validation.byTeacher ? "default" : "outline"}
+                                        onClick={() => handleValidationToggle(fieldValue)}
+                                        disabled={validatingFieldId === fieldValue.id}
+                                        className="text-xs"
+                                      >
+                                        {validatingFieldId === fieldValue.id ? (
+                                          "Loading..."
+                                        ) : fieldValue.validation.byTeacher ? (
+                                          <>
+                                            <CheckCircle className="h-3 w-3 mr-1" />
+                                            Tervalidasi
+                                          </>
+                                        ) : (
+                                          <>
+                                            <XCircle className="h-3 w-3 mr-1" />
+                                            Validasi
+                                          </>
+                                        )}
+                                      </Button>
+                                    )}
                                   </div>
                                 </div>
 

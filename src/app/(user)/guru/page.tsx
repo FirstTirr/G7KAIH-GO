@@ -1,8 +1,8 @@
 
 "use client"
 
-import { TeacherDashboard } from "@/components/teacher/TeacherDashboard"
+import { StudentsList } from "@/components/teacher/StudentsList"
 
-export default function Page() {
-  return <TeacherDashboard />
+export default function GuruPage() {
+  return <StudentsList />
 }

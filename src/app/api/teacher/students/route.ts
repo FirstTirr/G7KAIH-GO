@@ -1,4 +1,4 @@
-import { createAdminClient } from "@/utils/supabase/admin";
+import { createClient } from "@/utils/supabase/server";
 import { NextResponse } from "next/server";
 
 // Lightweight in-memory cache for the full response (helps repeated loads in short bursts)
@@ -47,12 +47,53 @@ export async function GET() {
   try {
     console.log("Service key exists:", !!process.env.SUPABASE_SERVICE_ROLE_KEY)
     console.log("URL:", process.env.NEXT_PUBLIC_SUPABASE_URL)
-    // Serve from cache when fresh
-    if (CACHE && Date.now() < CACHE.expiresAt) {
-      return NextResponse.json({ data: CACHE.data })
+    
+    // Get current user to verify they are a teacher
+    const authSupabase = await createClient()
+    const { data: { user }, error: authError } = await authSupabase.auth.getUser()
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-  const supabase = await createAdminClient()
+    // Get current user's profile to get their class and verify they are a teacher
+    const { data: teacherProfile, error: profileError } = await authSupabase
+      .from('user_profiles')
+      .select('userid, username, kelas, roleid')
+      .eq('userid', user.id)
+      .single()
+
+    if (profileError || !teacherProfile) {
+      return NextResponse.json({ 
+        error: "Teacher profile not found" 
+      }, { status: 403 })
+    }
+
+    // Verify user is a teacher (roleid 2) or guru wali (roleid 6)
+    if (teacherProfile.roleid !== 2 && teacherProfile.roleid !== 6) {
+      return NextResponse.json({ 
+        error: "Only teachers can access this endpoint" 
+      }, { status: 403 })
+    }
+
+    // Get teacher's class
+    const teacherClass = teacherProfile.kelas;
+    
+    if (!teacherClass) {
+      return NextResponse.json({ 
+        error: "Teacher must have a class assigned" 
+      }, { status: 400 })
+    }
+
+    console.log("Teacher verified:", teacherProfile.username, "Class:", teacherClass)
+    
+    // Serve from cache when fresh - but we need to filter by teacher's class
+    if (CACHE && Date.now() < CACHE.expiresAt) {
+      const filteredData = CACHE.data.filter((student: any) => student.class === teacherClass)
+      return NextResponse.json({ data: filteredData })
+    }
+
+  const supabase = await createClient()
 
     // Fetch roles to find the role id for students (case-insensitive match)
     const { data: roles, error: roleErr } = await supabase
@@ -294,10 +335,15 @@ export async function GET() {
     // Filter to only include students if siswaRoleId is found
     if (siswaRoleId) {
       data = data.filter(d => d.roleid === siswaRoleId)
-    }  // Store in cache (best effort)
-  CACHE = { data, expiresAt: Date.now() + CACHE_TTL_MS }
-  console.log("Final data:", data)
-  return NextResponse.json({ data })
+    }
+    
+    // Filter students by teacher's class
+    data = data.filter(d => d.class === teacherClass)
+    
+    // Store in cache (best effort)
+    CACHE = { data, expiresAt: Date.now() + CACHE_TTL_MS }
+    console.log("Final data filtered for class:", teacherClass, data)
+    return NextResponse.json({ data })
   } catch (err: any) {
     return NextResponse.json({ error: err?.message || "Unexpected error" }, { status: 500 })
   }

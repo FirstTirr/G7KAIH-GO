@@ -119,3 +119,55 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Custom gradient animations and utilities */
+@layer utilities {
+  .gradient-shift {
+    background-size: 200% 200%;
+    animation: gradient-shift 4s ease infinite;
+  }
+  
+  .gradient-pulse {
+    animation: gradient-pulse 3s ease-in-out infinite;
+  }
+  
+  .text-gradient {
+    @apply text-transparent bg-clip-text;
+  }
+}
+
+@keyframes gradient-shift {
+  0%, 100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+@keyframes gradient-pulse {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
+/* Enhanced gradient color stops */
+.via-blue-25 {
+  --tw-gradient-to: rgb(239 246 255) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), rgba(219, 234, 254, 0.5) var(--tw-gradient-via-position), var(--tw-gradient-to);
+}
+
+.via-purple-25 {
+  --tw-gradient-to: rgb(250 245 255) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), rgba(237, 233, 254, 0.5) var(--tw-gradient-via-position), var(--tw-gradient-to);
+}
+
+.via-gray-850 {
+  --tw-gradient-to: rgb(31 41 55) var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), rgb(31 41 55) var(--tw-gradient-via-position), var(--tw-gradient-to);
+}

@@ -22,12 +22,12 @@ function clearAliasCache() {
   }
 }
 
-export async function GET(req: NextRequest, { params }: { params: { userid: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     // Clear contaminated cache on first request after fix
     clearAliasCache()
     
-    const { userid } = await params
+    const { id: userid } = await params
     if (!userid) {
       return NextResponse.json({ error: "userid is required" }, { status: 400 })
     }
@@ -465,9 +465,9 @@ export async function GET(req: NextRequest, { params }: { params: { userid: stri
   }
 }
 
-export async function POST(req: NextRequest, { params }: { params: { userid: string } }) {
+export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
-    const { userid } = await params
+    const { id: userid } = await params
     const body = await req.json().catch(() => ({})) as {
       action?: 'validate' | 'invalidate'
       by?: 'teacher' | 'parent'

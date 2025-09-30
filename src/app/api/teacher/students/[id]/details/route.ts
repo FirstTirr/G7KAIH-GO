@@ -4,10 +4,10 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ userid: string }> }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { userid: studentId } = await params
+    const { id: studentId } = await params
     const supabase = await createClient()
     const adminSupabase = await createAdminClient()
     const { data: { user } } = await supabase.auth.getUser()
@@ -29,7 +29,7 @@ export async function GET(
       .eq('roleid', userProfile?.roleid)
       .single()
 
-    if (role?.rolename !== 'teacher') {
+    if (role?.rolename !== 'teacher' && role?.rolename !== 'guruwali') {
       return NextResponse.json({ error: 'Forbidden - Only teachers can access this data' }, { status: 403 })
     }
 
