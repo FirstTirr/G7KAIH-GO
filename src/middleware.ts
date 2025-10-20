@@ -1,184 +1,109 @@
-import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
-    request,
-  })
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll()
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => request.cookies.set(name, value))
-          supabaseResponse = NextResponse.next({
-            request,
-          })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
   const pathname = request.nextUrl.pathname
+
+  // Auth paths don't need token verification
+  const authPaths = ['/api/auth/login', '/api/auth/signup']
+  if (authPaths.some(path => pathname.startsWith(path))) {
+    return NextResponse.next()
+  }
 
   // Public routes that don't require authentication
   const publicRoutes = ['/login', '/auth/callback', '/auth/confirm', '/error', '/auth/auth-code-error', '/tos']
   const isPublicRoute = publicRoutes.some(route => pathname.startsWith(route))
 
+  const authToken = request.cookies.get('auth-token')
+
   // Redirect unauthenticated users to login
-  if (!user && !isPublicRoute && pathname !== '/') {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
+  if (!authToken && !isPublicRoute && pathname !== '/') {
+    return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Auth guard for authenticated users
-  if (user && !isPublicRoute) {
-    // Get user profile and role
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('userid, username, roleid')
-      .eq('userid', user.id)
-      .single()
+  // Add auth token to request headers if it exists
+  if (authToken) {
+    const requestHeaders = new Headers(request.headers)
+    requestHeaders.set('Authorization', `Bearer ${authToken.value}`)
+    
+    const response = NextResponse.next({
+      request: {
+        headers: requestHeaders,
+      },
+    })
 
-    if (profile?.roleid) {
-      // Get role name
-      const { data: roleData } = await supabase
-        .from('role')
-        .select('rolename')
-        .eq('roleid', profile.roleid)
-        .single()
+    // Role-based routing
+    if (!isPublicRoute && !pathname.startsWith('/api/')) {
+      try {
+        const userRes = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/auth/user`, {
+          headers: { 'Authorization': `Bearer ${authToken.value}` }
+        })
 
-      const roleName = roleData?.rolename
+        if (userRes.ok) {
+          const { user } = await userRes.json()
+          const role = user.profile?.role || 'unknown'
 
-      // Route protection based on role
-  if (pathname.startsWith('/dashboard') && roleName !== 'admin' && roleName !== 'teacher') {
-        // Redirect to appropriate role page instead of unknown
-        switch (roleName) {
-          case 'teacher':
-            return NextResponse.redirect(new URL('/guru', request.url))
-          case 'guruwali':
-            return NextResponse.redirect(new URL('/guruwali', request.url))
-          case 'student':
-            return NextResponse.redirect(new URL('/siswa', request.url))
-          case 'parent':
-            return NextResponse.redirect(new URL('/orangtua', request.url))
-          default:
-            return NextResponse.redirect(new URL('/unknown', request.url))
-        }
-      }
-      
-  if (pathname.startsWith('/siswa') && roleName !== 'student') {
-        // Redirect to appropriate role page instead of unknown
-        switch (roleName) {
-          case 'admin':
-            return NextResponse.redirect(new URL('/dashboard', request.url))
-          case 'teacher':
-            return NextResponse.redirect(new URL('/guru', request.url))
-          case 'guruwali':
-            return NextResponse.redirect(new URL('/guruwali', request.url))
-          case 'parent':
-            return NextResponse.redirect(new URL('/orangtua', request.url))
-          default:
-            return NextResponse.redirect(new URL('/unknown', request.url))
-        }
-      }
-      
-      if (pathname.startsWith('/guru') && roleName !== 'teacher' && roleName !== 'guruwali') {
-        // Redirect to appropriate role page instead of unknown
-        switch (roleName) {
-          case 'admin':
-            return NextResponse.redirect(new URL('/dashboard', request.url))
-          case 'student':
-            return NextResponse.redirect(new URL('/siswa', request.url))
-          case 'parent':
-            return NextResponse.redirect(new URL('/orangtua', request.url))
-          default:
-            return NextResponse.redirect(new URL('/unknown', request.url))
-        }
-      }
+          // Redirect root path based on role
+          if (pathname === '/') {
+            return NextResponse.redirect(new URL(getRoleHomePath(role), request.url))
+          }
 
-      if (pathname.startsWith('/guruwali') && roleName !== 'guruwali') {
-        // Redirect to appropriate role page instead of unknown
-        switch (roleName) {
-          case 'admin':
-            return NextResponse.redirect(new URL('/dashboard', request.url))
-          case 'teacher':
-            return NextResponse.redirect(new URL('/guru', request.url))
-          case 'student':
-            return NextResponse.redirect(new URL('/siswa', request.url))
-          case 'parent':
-            return NextResponse.redirect(new URL('/orangtua', request.url))
-          default:
-            return NextResponse.redirect(new URL('/unknown', request.url))
+          // Role-based access control
+          if (!checkRoleAccess(pathname, role)) {
+            return NextResponse.redirect(new URL(getRoleHomePath(role), request.url))
+          }
         }
+      } catch (error) {
+        console.error('Error fetching user profile:', error)
       }
-      
-      if (pathname.startsWith('/orangtua') && roleName !== 'parent') {
-        // Redirect to appropriate role page instead of unknown
-        switch (roleName) {
-          case 'admin':
-            return NextResponse.redirect(new URL('/dashboard', request.url))
-          case 'teacher':
-            return NextResponse.redirect(new URL('/guru', request.url))
-          case 'guruwali':
-            return NextResponse.redirect(new URL('/guruwali', request.url))
-          case 'student':
-            return NextResponse.redirect(new URL('/siswa', request.url))
-          default:
-            return NextResponse.redirect(new URL('/unknown', request.url))
-        }
-      }
+    }
 
-      // Users with role 'unknown' can only access /unknown
-      if (roleName === 'unknown' && pathname !== '/unknown') {
-        return NextResponse.redirect(new URL('/unknown', request.url))
-      }
+    return response
+  }
 
-      // Redirect root path based on role
-      if (pathname === '/') {
-        switch (roleName) {
-          case 'admin':
-            return NextResponse.redirect(new URL('/dashboard', request.url))
-          case 'student':
-            return NextResponse.redirect(new URL('/siswa', request.url))
-          case 'teacher':
-            return NextResponse.redirect(new URL('/guru', request.url))
-          case 'guruwali':
-            return NextResponse.redirect(new URL('/guruwali', request.url))
-          case 'parent':
-            return NextResponse.redirect(new URL('/orangtua', request.url))
-          case 'unknown':
-            return NextResponse.redirect(new URL('/unknown', request.url))
-          default:
-            return NextResponse.redirect(new URL('/unknown', request.url))
-        }
-      }
-    } else {
-      // No profile found, redirect to unknown
-      if (pathname !== '/unknown') {
-        return NextResponse.redirect(new URL('/unknown', request.url))
-      }
+  return NextResponse.next()
+}
+
+function getRoleHomePath(role: string): string {
+  switch (role) {
+    case 'admin':
+      return '/dashboard'
+    case 'siswa':
+      return '/siswa'
+    case 'guru':
+      return '/guru'
+    case 'guruwali':
+      return '/guruwali'
+    case 'orangtua':
+      return '/orangtua'
+    default:
+      return '/unknown'
+  }
+}
+
+function checkRoleAccess(pathname: string, role: string): boolean {
+  const roleAccessMap: Record<string, string[]> = {
+    '/dashboard': ['admin'],
+    '/guru': ['guru', 'guruwali'],
+    '/guruwali': ['guruwali'],
+    '/siswa': ['siswa'],
+    '/orangtua': ['orangtua'],
+    '/unknown': ['unknown']
+  }
+
+  for (const [path, allowedRoles] of Object.entries(roleAccessMap)) {
+    if (pathname.startsWith(path)) {
+      return allowedRoles.includes(role)
     }
   }
 
-  return supabaseResponse
+  return false
 }
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
-  ],
+    // Apply middleware to all routes except static files and images
+    '/((?!api/auth|_next/static|_next/image|favicon.ico).*)',
+    // Include API routes that need auth
+    '/api/:path*'
+  ]
 }

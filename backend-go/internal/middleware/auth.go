@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/DityaPerdana/G7KAIH/backend/internal/auth"
+	"github.com/FirstTirr/G7KAIH-GO/internal/auth"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )

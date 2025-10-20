@@ -1,10 +1,10 @@
 package router
 
 import (
-	"github.com/DityaPerdana/G7KAIH/backend/internal/auth"
-	"github.com/DityaPerdana/G7KAIH/backend/internal/config"
-	"github.com/DityaPerdana/G7KAIH/backend/internal/handlers"
-	"github.com/DityaPerdana/G7KAIH/backend/internal/middleware"
+	"github.com/FirstTirr/G7KAIH-GO/internal/auth"
+	"github.com/FirstTirr/G7KAIH-GO/internal/config"
+	"github.com/FirstTirr/G7KAIH-GO/internal/handlers"
+	"github.com/FirstTirr/G7KAIH-GO/internal/middleware"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
@@ -47,7 +47,6 @@ func Setup(db *gorm.DB, cfg *config.Config) *gin.Engine {
 	jwtService := auth.NewJWTService(
 		cfg.JWT.Secret,
 		cfg.JWT.ExpirationHours,
-		cfg.JWT.RefreshExpirationHours,
 	)
 
 	// Auth Middleware
@@ -79,9 +78,10 @@ func Setup(db *gorm.DB, cfg *config.Config) *gin.Engine {
 		// Auth routes (public)
 		auth := v1.Group("/auth")
 		{
-			auth.POST("/register", authHandler.Register)
+			auth.POST("/signup", authHandler.Signup)
 			auth.POST("/login", authHandler.Login)
-			auth.POST("/refresh", authHandler.RefreshToken)
+			// expose a token-validated 'me' endpoint so frontends can fetch current user
+			// Note: requires Authorization header (Bearer token)
 			auth.GET("/me", authMiddleware.Authenticate(), authHandler.Me)
 		}
 
@@ -132,7 +132,6 @@ func Setup(db *gorm.DB, cfg *config.Config) *gin.Engine {
 		{
 			users.GET("/profile", userHandler.GetProfile)
 			users.PUT("/profile", userHandler.UpdateProfile)
-			users.PUT("/password", userHandler.UpdatePassword)
 		}
 
 		// Teacher routes

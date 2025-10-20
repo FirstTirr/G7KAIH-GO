@@ -42,9 +42,8 @@ type DatabaseConfig struct {
 }
 
 type JWTConfig struct {
-	Secret                 string
-	ExpirationHours        int
-	RefreshExpirationHours int
+	Secret          string
+	ExpirationHours int
 }
 
 type CloudinaryConfig struct {
@@ -114,9 +113,8 @@ func Load() *Config {
 			ConnMaxLifetime: getEnvAsDuration("DB_CONN_MAX_LIFETIME", "1h"),
 		},
 		JWT: JWTConfig{
-			Secret:                 getEnv("JWT_SECRET", "your-secret-key"),
-			ExpirationHours:        getEnvAsInt("JWT_EXPIRATION_HOURS", 24),
-			RefreshExpirationHours: getEnvAsInt("JWT_REFRESH_EXPIRATION_HOURS", 168),
+			Secret:          getEnv("JWT_SECRET", "your-secret-key"),
+			ExpirationHours: getEnvAsInt("JWT_EXPIRATION_HOURS", 24),
 		},
 		Cloudinary: CloudinaryConfig{
 			CloudName:    getEnv("CLOUDINARY_CLOUD_NAME", ""),

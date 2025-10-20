@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/DityaPerdana/G7KAIH/backend/internal/config"
-	"github.com/DityaPerdana/G7KAIH/backend/internal/models"
+	"github.com/FirstTirr/G7KAIH-GO/internal/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -48,21 +47,8 @@ func Migrate(db *gorm.DB) error {
 		return fmt.Errorf("failed to create uuid extension: %w", err)
 	}
 
-	// Auto migrate all models
-	if err := db.AutoMigrate(
-		&models.User{},
-		&models.UserProfile{},
-		&models.Category{},
-		&models.Kegiatan{},
-		&models.Activity{},
-		&models.Comment{},
-		&models.TeacherRole{},
-		&models.GuruWaliAssignment{},
-		&models.ParentStudent{},
-		&models.SubmissionWindow{},
-	); err != nil {
-		return fmt.Errorf("failed to run migrations: %w", err)
-	}
+	// Skip auto-migration since we're using schema.sql
+	log.Println("Using existing schema.sql for database structure...")
 
 	// Create indexes
 	if err := createIndexes(db); err != nil {
@@ -75,14 +61,18 @@ func Migrate(db *gorm.DB) error {
 
 func createIndexes(db *gorm.DB) error {
 	indexes := []string{
-		"CREATE INDEX IF NOT EXISTS idx_activities_user_date ON activities (user_id, date DESC)",
+		// activities references the user_profile_id column
+		"CREATE INDEX IF NOT EXISTS idx_activities_user_date ON activities (user_profile_id, date DESC)",
 		"CREATE INDEX IF NOT EXISTS idx_activities_kegiatan_date ON activities (kegiatan_id, date DESC)",
 		"CREATE INDEX IF NOT EXISTS idx_activities_status ON activities (status)",
 		"CREATE INDEX IF NOT EXISTS idx_comments_activity ON comments (activity_id, created_at DESC)",
 		"CREATE INDEX IF NOT EXISTS idx_user_profiles_role ON user_profiles (role)",
 		"CREATE INDEX IF NOT EXISTS idx_user_profiles_class ON user_profiles (class)",
-		"CREATE INDEX IF NOT EXISTS idx_teacher_roles_class ON teacher_roles (class_name)",
-		"CREATE INDEX IF NOT EXISTS idx_guruwali_class ON guruwali_assignments (class_name)",
+		// teacher_roles uses class_name per schema
+		"CREATE INDEX IF NOT EXISTS idx_teacher_roles_class_name ON teacher_roles (class_name)",
+		// guruwali_assignments doesn't have class_name; index teacher_id/student_id instead
+		"CREATE INDEX IF NOT EXISTS idx_guruwali_assignments_teacher_id ON guruwali_assignments (teacher_id)",
+		"CREATE INDEX IF NOT EXISTS idx_guruwali_assignments_student_id ON guruwali_assignments (student_id)",
 	}
 
 	for _, idx := range indexes {

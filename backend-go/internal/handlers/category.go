@@ -3,7 +3,7 @@ package handlers
 import (
 	"net/http"
 
-	"github.com/DityaPerdana/G7KAIH/backend/internal/models"
+	"github.com/FirstTirr/G7KAIH-GO/internal/models"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )

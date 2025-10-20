@@ -2,11 +2,12 @@ package handlers
 
 import (
 	"encoding/csv"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
-	"github.com/DityaPerdana/G7KAIH/backend/internal/auth"
-	"github.com/DityaPerdana/G7KAIH/backend/internal/models"
+	"github.com/FirstTirr/G7KAIH-GO/internal/models"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -21,12 +22,14 @@ func NewAdminHandler(db *gorm.DB) *AdminHandler {
 }
 
 type CreateUserRequest struct {
-	Email    string  `json:"email" binding:"required,email"`
-	Password string  `json:"password" binding:"required,min=6"`
-	Name     string  `json:"name" binding:"required"`
-	Role     string  `json:"role" binding:"required"`
-	NIS      *string `json:"nis"`
-	Class    *string `json:"class"`
+	Name  string `json:"name" binding:"required"`
+	Class string `json:"class" binding:"required"`
+	Role  string `json:"role" binding:"required,oneof=siswa orangtua guru guruwali admin"`
+}
+
+type CreateUserResponse struct {
+	UserID string `json:"user_id"`
+	Token  string `json:"token"` // 4-digit token
 }
 
 type LinkParentStudentRequest struct {
@@ -36,7 +39,7 @@ type LinkParentStudentRequest struct {
 
 type AssignGuruWaliRequest struct {
 	TeacherID uuid.UUID `json:"teacher_id" binding:"required"`
-	ClassName string    `json:"class_name" binding:"required"`
+	StudentID uuid.UUID `json:"student_id" binding:"required"`
 }
 
 type AssignTeacherRoleRequest struct {
@@ -51,6 +54,8 @@ type UpdateSubmissionWindowRequest struct {
 	CloseTime *string `json:"close_time"`
 }
 
+
+
 // GetUsers godoc
 // @Summary Get all users
 // @Description Get list of all users with optional filters
@@ -62,7 +67,7 @@ type UpdateSubmissionWindowRequest struct {
 // @Success 200 {array} models.UserProfile
 // @Router /admin/users [get]
 func (h *AdminHandler) GetUsers(c *gin.Context) {
-	query := h.db.Model(&models.UserProfile{}).Preload("User")
+	query := h.db.Model(&models.UserProfile{})
 
 	if role := c.Query("role"); role != "" {
 		query = query.Where("role = ?", role)
@@ -89,7 +94,7 @@ func (h *AdminHandler) GetUsers(c *gin.Context) {
 // @Produce json
 // @Security BearerAuth
 // @Param user body CreateUserRequest true "User data"
-// @Success 201 {object} LoginResponse
+// @Success 201 {object} CreateUserResponse
 // @Router /admin/users [post]
 func (h *AdminHandler) CreateUser(c *gin.Context) {
 	var req CreateUserRequest
@@ -98,59 +103,31 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
-	// Check if user already exists
-	var existingUser models.User
-	if err := h.db.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Email already registered"})
-		return
-	}
-
-	hashedPassword, err := auth.HashPassword(req.Password)
+	token, err := random4Digits()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process password"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate token"})
 		return
 	}
+	hash := hashToken(token)
 
-	tx := h.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	user := models.User{
-		Email:    req.Email,
-		Password: hashedPassword,
+	profile := &models.UserProfile{
+		ID:        uuid.New(),
+		Name:      req.Name,
+		Class:     req.Class,
+		Role:      req.Role,
+		TokenHash: hash,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
-	if err := tx.Create(&user).Error; err != nil {
-		tx.Rollback()
+	if err := h.db.Create(profile).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
 		return
 	}
 
-	profile := models.UserProfile{
-		UserID: user.ID,
-		Name:   req.Name,
-		Role:   req.Role,
-		NIS:    req.NIS,
-		Class:  req.Class,
-	}
-
-	if err := tx.Create(&profile).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create profile"})
-		return
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete user creation"})
-		return
-	}
-
-	c.JSON(http.StatusCreated, gin.H{
-		"user":    user,
-		"profile": profile,
+	c.JSON(http.StatusCreated, CreateUserResponse{
+		UserID: profile.ID.String(),
+		Token:  token,
 	})
 }
 
@@ -169,7 +146,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 	id := c.Param("id")
 
 	var profile models.UserProfile
-	if err := h.db.Where("user_id = ?", id).First(&profile).Error; err != nil {
+	if err := h.db.Where("id = ?", id).First(&profile).Error; err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
 		return
 	}
@@ -182,7 +159,6 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 
 	profile.Name = req.Name
 	profile.Role = req.Role
-	profile.NIS = req.NIS
 	profile.Class = req.Class
 
 	if err := h.db.Save(&profile).Error; err != nil {
@@ -204,7 +180,7 @@ func (h *AdminHandler) UpdateUser(c *gin.Context) {
 func (h *AdminHandler) DeleteUser(c *gin.Context) {
 	id := c.Param("id")
 
-	if err := h.db.Where("id = ?", id).Delete(&models.User{}).Error; err != nil {
+	if err := h.db.Where("id = ?", id).Delete(&models.UserProfile{}).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user"})
 		return
 	}
@@ -214,7 +190,7 @@ func (h *AdminHandler) DeleteUser(c *gin.Context) {
 
 // BulkImportUsers godoc
 // @Summary Bulk import users from CSV
-// @Description Import multiple users from CSV file
+// @Description Import multiple users from CSV file (format: name,class,role)
 // @Tags admin
 // @Accept multipart/form-data
 // @Produce json
@@ -252,73 +228,49 @@ func (h *AdminHandler) BulkImportUsers(c *gin.Context) {
 	successCount := 0
 	errorCount := 0
 	errors := []string{}
+	tokens := []map[string]string{}
 
 	for i, record := range records[1:] {
-		if len(record) < 4 {
-			errors = append(errors, "Row "+string(rune(i+2))+": Invalid format")
+		if len(record) < 3 {
+			errors = append(errors, fmt.Sprintf("Row %d: Invalid format (expected: name,class,role)", i+2))
 			errorCount++
 			continue
 		}
 
-		email := strings.TrimSpace(record[0])
-		name := strings.TrimSpace(record[1])
+		name := strings.TrimSpace(record[0])
+		class := strings.TrimSpace(record[1])
 		role := strings.TrimSpace(record[2])
-		password := strings.TrimSpace(record[3])
 
-		var nis, class *string
-		if len(record) > 4 && record[4] != "" {
-			nisVal := strings.TrimSpace(record[4])
-			nis = &nisVal
-		}
-		if len(record) > 5 && record[5] != "" {
-			classVal := strings.TrimSpace(record[5])
-			class = &classVal
-		}
-
-		// Check if user exists
-		var existingUser models.User
-		if err := h.db.Where("email = ?", email).First(&existingUser).Error; err == nil {
-			errors = append(errors, "Row "+string(rune(i+2))+": Email already exists")
-			errorCount++
-			continue
-		}
-
-		hashedPassword, err := auth.HashPassword(password)
+		// Generate token
+		token, err := random4Digits()
 		if err != nil {
-			errors = append(errors, "Row "+string(rune(i+2))+": Failed to hash password")
+			errors = append(errors, fmt.Sprintf("Row %d: Failed to generate token", i+2))
 			errorCount++
 			continue
 		}
-
-		tx := h.db.Begin()
-		user := models.User{
-			Email:    email,
-			Password: hashedPassword,
-		}
-
-		if err := tx.Create(&user).Error; err != nil {
-			tx.Rollback()
-			errors = append(errors, "Row "+string(rune(i+2))+": Failed to create user")
-			errorCount++
-			continue
-		}
+		hash := hashToken(token)
 
 		profile := models.UserProfile{
-			UserID: user.ID,
-			Name:   name,
-			Role:   role,
-			NIS:    nis,
-			Class:  class,
+			ID:        uuid.New(),
+			Name:      name,
+			Class:     class,
+			Role:      role,
+			TokenHash: hash,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 
-		if err := tx.Create(&profile).Error; err != nil {
-			tx.Rollback()
-			errors = append(errors, "Row "+string(rune(i+2))+": Failed to create profile")
+		if err := h.db.Create(&profile).Error; err != nil {
+			errors = append(errors, fmt.Sprintf("Row %d: Failed to create user - %s", i+2, err.Error()))
 			errorCount++
 			continue
 		}
 
-		tx.Commit()
+		tokens = append(tokens, map[string]string{
+			"name":  name,
+			"token": token,
+			"id":    profile.ID.String(),
+		})
 		successCount++
 	}
 
@@ -326,6 +278,7 @@ func (h *AdminHandler) BulkImportUsers(c *gin.Context) {
 		"success_count": successCount,
 		"error_count":   errorCount,
 		"errors":        errors,
+		"tokens":        tokens, // Return tokens for users to save
 	})
 }
 
@@ -349,6 +302,8 @@ func (h *AdminHandler) LinkParentStudent(c *gin.Context) {
 	link := models.ParentStudent{
 		ParentID:  req.ParentID,
 		StudentID: req.StudentID,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	if err := h.db.Create(&link).Error; err != nil {
@@ -379,8 +334,8 @@ func (h *AdminHandler) UnlinkParentStudent(c *gin.Context) {
 }
 
 // AssignGuruWali godoc
-// @Summary Assign guruwali to class
-// @Description Assign a teacher as guruwali (homeroom teacher) for a class
+// @Summary Assign guruwali to student
+// @Description Assign a teacher as guruwali (homeroom teacher) for a student
 // @Tags admin
 // @Accept json
 // @Produce json
@@ -397,7 +352,9 @@ func (h *AdminHandler) AssignGuruWali(c *gin.Context) {
 
 	assignment := models.GuruWaliAssignment{
 		TeacherID: req.TeacherID,
-		ClassName: req.ClassName,
+		StudentID: req.StudentID,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	if err := h.db.Create(&assignment).Error; err != nil {
@@ -405,13 +362,13 @@ func (h *AdminHandler) AssignGuruWali(c *gin.Context) {
 		return
 	}
 
-	h.db.Preload("Teacher.Profile").First(&assignment, assignment.ID)
+	h.db.Preload("Teacher").Preload("Student").First(&assignment, assignment.ID)
 
 	c.JSON(http.StatusCreated, assignment)
 }
 
 // UnassignGuruWali godoc
-// @Summary Unassign guruwali from class
+// @Summary Unassign guruwali from student
 // @Description Remove guruwali assignment
 // @Tags admin
 // @Security BearerAuth
@@ -439,7 +396,7 @@ func (h *AdminHandler) UnassignGuruWali(c *gin.Context) {
 // @Router /admin/guruwali-assignments [get]
 func (h *AdminHandler) GetGuruWaliAssignments(c *gin.Context) {
 	var assignments []models.GuruWaliAssignment
-	if err := h.db.Preload("Teacher.Profile").Find(&assignments).Error; err != nil {
+	if err := h.db.Preload("Teacher").Preload("Student").Find(&assignments).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch assignments"})
 		return
 	}
@@ -468,6 +425,8 @@ func (h *AdminHandler) AssignTeacherRole(c *gin.Context) {
 		TeacherID: req.TeacherID,
 		ClassName: req.ClassName,
 		Subject:   req.Subject,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
 	}
 
 	if err := h.db.Create(&role).Error; err != nil {
@@ -475,7 +434,7 @@ func (h *AdminHandler) AssignTeacherRole(c *gin.Context) {
 		return
 	}
 
-	h.db.Preload("Teacher.Profile").First(&role, role.ID)
+	h.db.Preload("Teacher").First(&role, role.ID)
 
 	c.JSON(http.StatusCreated, role)
 }
@@ -509,7 +468,7 @@ func (h *AdminHandler) UnassignTeacherRole(c *gin.Context) {
 // @Router /admin/teacher-roles [get]
 func (h *AdminHandler) GetTeacherRoles(c *gin.Context) {
 	var roles []models.TeacherRole
-	if err := h.db.Preload("Teacher.Profile").Find(&roles).Error; err != nil {
+	if err := h.db.Preload("Teacher").Find(&roles).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch roles"})
 		return
 	}
@@ -530,7 +489,9 @@ func (h *AdminHandler) GetSubmissionWindow(c *gin.Context) {
 	if err := h.db.First(&window).Error; err != nil {
 		// Create default if not exists
 		window = models.SubmissionWindow{
-			IsOpen: true,
+			IsOpen:    true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
 		}
 		h.db.Create(&window)
 	}
@@ -552,7 +513,11 @@ func (h *AdminHandler) UpdateSubmissionWindow(c *gin.Context) {
 	var window models.SubmissionWindow
 	if err := h.db.First(&window).Error; err != nil {
 		// Create if not exists
-		window = models.SubmissionWindow{IsOpen: true}
+		window = models.SubmissionWindow{
+			IsOpen:    true,
+			CreatedAt: time.Now(),
+			UpdatedAt: time.Now(),
+		}
 		h.db.Create(&window)
 	}
 
@@ -571,6 +536,8 @@ func (h *AdminHandler) UpdateSubmissionWindow(c *gin.Context) {
 	if req.CloseTime != nil {
 		window.CloseTime = req.CloseTime
 	}
+
+	window.UpdatedAt = time.Now()
 
 	if err := h.db.Save(&window).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update window"})

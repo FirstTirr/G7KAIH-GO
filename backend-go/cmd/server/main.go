@@ -4,9 +4,9 @@ import (
 	"log"
 	"os"
 
-	"github.com/DityaPerdana/G7KAIH/backend/internal/config"
-	"github.com/DityaPerdana/G7KAIH/backend/internal/database"
-	"github.com/DityaPerdana/G7KAIH/backend/internal/router"
+	"github.com/FirstTirr/G7KAIH-GO/internal/config"
+	"github.com/FirstTirr/G7KAIH-GO/internal/database"
+	"github.com/FirstTirr/G7KAIH-GO/internal/router"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 )

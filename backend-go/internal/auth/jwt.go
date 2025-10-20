@@ -20,50 +20,33 @@ type Claims struct {
 	jwt.RegisteredClaims
 }
 
+type JWTService struct {
+	secretKey       []byte
+	expirationHours int
+}
+
 type TokenPair struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	ExpiresAt    int64  `json:"expires_at"`
 }
 
-type JWTService struct {
-	secretKey              []byte
-	expirationHours        int
-	refreshExpirationHours int
-}
-
-func NewJWTService(secret string, expirationHours, refreshExpirationHours int) *JWTService {
+func NewJWTService(secret string, expirationHours int) *JWTService {
 	return &JWTService{
-		secretKey:              []byte(secret),
-		expirationHours:        expirationHours,
-		refreshExpirationHours: refreshExpirationHours,
+		secretKey:       []byte(secret),
+		expirationHours: expirationHours,
 	}
 }
 
-func (s *JWTService) GenerateTokenPair(userID uuid.UUID, email, role string) (*TokenPair, error) {
-	accessToken, expiresAt, err := s.generateToken(userID, email, role, s.expirationHours)
-	if err != nil {
-		return nil, err
-	}
-
-	refreshToken, _, err := s.generateToken(userID, email, role, s.refreshExpirationHours)
-	if err != nil {
-		return nil, err
-	}
-
-	return &TokenPair{
-		AccessToken:  accessToken,
-		RefreshToken: refreshToken,
-		ExpiresAt:    expiresAt,
-	}, nil
+func (s *JWTService) GenerateToken(userID uuid.UUID, role string) (string, int64, error) {
+	return s.generateToken(userID, role)
 }
 
-func (s *JWTService) generateToken(userID uuid.UUID, email, role string, hours int) (string, int64, error) {
-	expiresAt := time.Now().Add(time.Hour * time.Duration(hours))
+func (s *JWTService) generateToken(userID uuid.UUID, role string) (string, int64, error) {
+	expiresAt := time.Now().Add(time.Hour * time.Duration(s.expirationHours))
 
 	claims := &Claims{
 		UserID: userID,
-		Email:  email,
 		Role:   role,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ExpiresAt: jwt.NewNumericDate(expiresAt),
@@ -73,6 +56,7 @@ func (s *JWTService) generateToken(userID uuid.UUID, email, role string, hours i
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
 	tokenString, err := token.SignedString(s.secretKey)
 	if err != nil {
 		return "", 0, err
@@ -104,11 +88,11 @@ func (s *JWTService) ValidateToken(tokenString string) (*Claims, error) {
 	return claims, nil
 }
 
-func (s *JWTService) RefreshAccessToken(refreshToken string) (*TokenPair, error) {
+func (s *JWTService) RefreshAccessToken(refreshToken string) (string, int64, error) {
 	claims, err := s.ValidateToken(refreshToken)
 	if err != nil {
-		return nil, err
+		return "", 0, err
 	}
 
-	return s.GenerateTokenPair(claims.UserID, claims.Email, claims.Role)
+	return s.generateToken(claims.UserID, claims.Role)
 }

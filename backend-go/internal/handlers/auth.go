@@ -2,9 +2,10 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
-	"github.com/DityaPerdana/G7KAIH/backend/internal/auth"
-	"github.com/DityaPerdana/G7KAIH/backend/internal/models"
+	"github.com/FirstTirr/G7KAIH-GO/internal/auth"
+	"github.com/FirstTirr/G7KAIH-GO/internal/models"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -16,58 +17,61 @@ type AuthHandler struct {
 }
 
 func NewAuthHandler(db *gorm.DB, jwtService *auth.JWTService) *AuthHandler {
-	return &AuthHandler{
-		db:         db,
-		jwtService: jwtService,
-	}
+	return &AuthHandler{db: db, jwtService: jwtService}
+}
+
+type SignupRequest struct {
+	Name  string `json:"name" binding:"required"`
+	Class string `json:"class" binding:"required"`
+	Role  string `json:"role" binding:"required,oneof=siswa orangtua guru guruwali admin"`
+}
+
+type SignupResponse struct {
+	UserID string `json:"user_id"`
+	Token  string `json:"token"`
 }
 
 type LoginRequest struct {
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required"`
-}
-
-type RegisterRequest struct {
-	Email    string  `json:"email" binding:"required,email"`
-	Password string  `json:"password" binding:"required,min=6"`
-	Name     string  `json:"name" binding:"required"`
-	Role     string  `json:"role" binding:"required,oneof=siswa orangtua guru guruwali admin"`
-	NIS      *string `json:"nis"`
-	Class    *string `json:"class"`
+	Token string `json:"token" binding:"required,len=4"`
 }
 
 type LoginResponse struct {
-	User    *UserResponse   `json:"user"`
-	Profile *ProfileResponse `json:"profile"`
-	Tokens  *auth.TokenPair  `json:"tokens"`
+	Token   string              `json:"token"`
+	Profile *models.UserProfile `json:"profile,omitempty"`
 }
 
-type UserResponse struct {
-	ID    uuid.UUID `json:"id"`
-	Email string    `json:"email"`
+func (h *AuthHandler) Signup(c *gin.Context) {
+	var req SignupRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	token, err := random4Digits()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		return
+	}
+	hash := hashToken(token)
+
+	profile := &models.UserProfile{
+		ID:        uuid.New(),
+		Name:      req.Name,
+		Class:     req.Class,
+		Role:      req.Role,
+		TokenHash: hash,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	if err := h.db.Create(profile).Error; err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create profile"})
+		return
+	}
+
+	c.JSON(http.StatusOK, SignupResponse{UserID: profile.ID.String(), Token: token})
 }
 
-type ProfileResponse struct {
-	ID        uuid.UUID `json:"id"`
-	UserID    uuid.UUID `json:"user_id"`
-	Name      string    `json:"name"`
-	NIS       *string   `json:"nis,omitempty"`
-	Class     *string   `json:"class,omitempty"`
-	Role      string    `json:"role"`
-	AvatarURL *string   `json:"avatar_url,omitempty"`
-}
-
-// Login godoc
-// @Summary Login user
-// @Description Login with email and password
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param credentials body LoginRequest true "Login credentials"
-// @Success 200 {object} LoginResponse
-// @Failure 400 {object} map[string]string
-// @Failure 401 {object} map[string]string
-// @Router /auth/login [post]
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -75,187 +79,27 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-	if err := h.db.Preload("Profile").Where("email = ?", req.Email).First(&user).Error; err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
-		return
-	}
+	hash := hashToken(req.Token)
 
-	if err := auth.VerifyPassword(user.Password, req.Password); err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
-		return
-	}
-
-	role := "siswa"
-	if user.Profile != nil {
-		role = user.Profile.Role
-	}
-
-	tokens, err := h.jwtService.GenerateTokenPair(user.ID, user.Email, role)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate tokens"})
-		return
-	}
-
-	response := &LoginResponse{
-		User: &UserResponse{
-			ID:    user.ID,
-			Email: user.Email,
-		},
-		Tokens: tokens,
-	}
-
-	if user.Profile != nil {
-		response.Profile = &ProfileResponse{
-			ID:        user.Profile.ID,
-			UserID:    user.Profile.UserID,
-			Name:      user.Profile.Name,
-			NIS:       user.Profile.NIS,
-			Class:     user.Profile.Class,
-			Role:      user.Profile.Role,
-			AvatarURL: user.Profile.AvatarURL,
+	var profile models.UserProfile
+	if err := h.db.Where("token_hash = ?", hash).First(&profile).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+			return
 		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return
 	}
 
-	c.JSON(http.StatusOK, response)
+	tokenStr, _, err := h.jwtService.GenerateToken(profile.ID, profile.Role)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		return
+	}
+
+	c.JSON(http.StatusOK, LoginResponse{Token: tokenStr, Profile: &profile})
 }
 
-// Register godoc
-// @Summary Register new user
-// @Description Register a new user account
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param user body RegisterRequest true "User registration data"
-// @Success 201 {object} LoginResponse
-// @Failure 400 {object} map[string]string
-// @Failure 500 {object} map[string]string
-// @Router /auth/register [post]
-func (h *AuthHandler) Register(c *gin.Context) {
-	var req RegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Check if user already exists
-	var existingUser models.User
-	if err := h.db.Where("email = ?", req.Email).First(&existingUser).Error; err == nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Email already registered"})
-		return
-	}
-
-	// Hash password
-	hashedPassword, err := auth.HashPassword(req.Password)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process password"})
-		return
-	}
-
-	// Create user with transaction
-	tx := h.db.Begin()
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-		}
-	}()
-
-	user := models.User{
-		Email:    req.Email,
-		Password: hashedPassword,
-	}
-
-	if err := tx.Create(&user).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create user"})
-		return
-	}
-
-	profile := models.UserProfile{
-		UserID: user.ID,
-		Name:   req.Name,
-		Role:   req.Role,
-		NIS:    req.NIS,
-		Class:  req.Class,
-	}
-
-	if err := tx.Create(&profile).Error; err != nil {
-		tx.Rollback()
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create profile"})
-		return
-	}
-
-	if err := tx.Commit().Error; err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to complete registration"})
-		return
-	}
-
-	// Generate tokens
-	tokens, err := h.jwtService.GenerateTokenPair(user.ID, user.Email, profile.Role)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate tokens"})
-		return
-	}
-
-	response := &LoginResponse{
-		User: &UserResponse{
-			ID:    user.ID,
-			Email: user.Email,
-		},
-		Profile: &ProfileResponse{
-			ID:        profile.ID,
-			UserID:    profile.UserID,
-			Name:      profile.Name,
-			NIS:       profile.NIS,
-			Class:     profile.Class,
-			Role:      profile.Role,
-			AvatarURL: profile.AvatarURL,
-		},
-		Tokens: tokens,
-	}
-
-	c.JSON(http.StatusCreated, response)
-}
-
-// RefreshToken godoc
-// @Summary Refresh access token
-// @Description Get new access token using refresh token
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param token body map[string]string true "Refresh token"
-// @Success 200 {object} auth.TokenPair
-// @Failure 400 {object} map[string]string
-// @Failure 401 {object} map[string]string
-// @Router /auth/refresh [post]
-func (h *AuthHandler) RefreshToken(c *gin.Context) {
-	var req struct {
-		RefreshToken string `json:"refresh_token" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	tokens, err := h.jwtService.RefreshAccessToken(req.RefreshToken)
-	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid refresh token"})
-		return
-	}
-
-	c.JSON(http.StatusOK, tokens)
-}
-
-// Me godoc
-// @Summary Get current user
-// @Description Get currently authenticated user info
-// @Tags auth
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} LoginResponse
-// @Failure 401 {object} map[string]string
-// @Router /auth/me [get]
 func (h *AuthHandler) Me(c *gin.Context) {
 	userID, exists := c.Get("user_id")
 	if !exists {
@@ -263,30 +107,21 @@ func (h *AuthHandler) Me(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-	if err := h.db.Preload("Profile").Where("id = ?", userID).First(&user).Error; err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+	var profile models.UserProfile
+	if err := h.db.Where("id = ?", userID).First(&profile).Error; err != nil {
+		if err == gorm.ErrRecordNotFound {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Profile not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 		return
 	}
 
-	response := &LoginResponse{
-		User: &UserResponse{
-			ID:    user.ID,
-			Email: user.Email,
-		},
+	tokenStr, _, err := h.jwtService.GenerateToken(profile.ID, profile.Role)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate token"})
+		return
 	}
 
-	if user.Profile != nil {
-		response.Profile = &ProfileResponse{
-			ID:        user.Profile.ID,
-			UserID:    user.Profile.UserID,
-			Name:      user.Profile.Name,
-			NIS:       user.Profile.NIS,
-			Class:     user.Profile.Class,
-			Role:      user.Profile.Role,
-			AvatarURL: user.Profile.AvatarURL,
-		}
-	}
-
-	c.JSON(http.StatusOK, response)
+	c.JSON(http.StatusOK, LoginResponse{Token: tokenStr, Profile: &profile})
 }

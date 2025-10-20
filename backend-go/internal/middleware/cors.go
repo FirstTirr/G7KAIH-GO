@@ -27,8 +27,12 @@ func CORS(allowedOrigins []string, allowCredentials bool) gin.HandlerFunc {
 		AllowMethods:     []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Authorization", "X-Requested-With", "X-CSRF-Token"},
 		ExposeHeaders:    []string{"Content-Length", "Content-Type", "Authorization"},
-		AllowCredentials: allowCredentials,
+		AllowCredentials: true, // Enable credentials for auth
 		MaxAge:           12 * time.Hour,
+	}
+
+	if len(allowedOrigins) == 0 {
+		config.AllowAllOrigins = true
 	}
 
 	return cors.New(config)
@@ -101,20 +105,18 @@ func CORSDynamic(allowedOrigins []string, allowCredentials bool, maxAgeHours int
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 		} else {
 			// Check if it's a valid IP-based origin
-			for _, allowedOrigin := range allowedOrigins {
-				if strings.HasPrefix(origin, "http://") || strings.HasPrefix(origin, "https://") {
-					// Extract IP or domain
-					parts := strings.Split(origin, "://")
-					if len(parts) == 2 {
-						hostPort := parts[1]
-						host := strings.Split(hostPort, ":")[0]
-						
-						// Check if this IP is allowed
-						for _, allowed := range allowedOrigins {
-							if strings.Contains(allowed, host) {
-								c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-								break
-							}
+			if strings.HasPrefix(origin, "http://") || strings.HasPrefix(origin, "https://") {
+				// Extract IP or domain
+				parts := strings.Split(origin, "://")
+				if len(parts) == 2 {
+					hostPort := parts[1]
+					host := strings.Split(hostPort, ":")[0]
+					
+					// Check if this IP is allowed
+					for _, allowed := range allowedOrigins {
+						if strings.Contains(allowed, host) {
+							c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+							break
 						}
 					}
 				}

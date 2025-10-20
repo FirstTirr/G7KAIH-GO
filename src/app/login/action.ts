@@ -1,93 +1,64 @@
 'use server'
 
-import { createClient } from '@/utils/supabase/server'
-import { revalidatePath } from 'next/cache'
+import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 export async function login(formData: FormData) {
-  const supabase = await createClient()
+  try {
+    // Send request to Go backend
+    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        token: formData.get('token'),
+      }),
+    })
 
-  const data = {
-    email: formData.get('email') as string,
-    password: formData.get('password') as string,
-  }
-
-  const { error } = await supabase.auth.signInWithPassword(data)
-
-  if (error) {
-    // Return specific error messages based on error type
-    if (error.message.includes('Invalid login credentials')) {
-      throw new Error('Email atau password salah. Silakan periksa kembali.')
-    } else if (error.message.includes('Email not confirmed')) {
-      throw new Error('Email belum dikonfirmasi. Silakan periksa email Anda.')
-    } else if (error.message.includes('Too many requests')) {
-      throw new Error('Terlalu banyak percobaan login. Silakan coba lagi nanti.')
-    } else {
+    if (!res.ok) {
+      const error = await res.json()
       throw new Error(error.message || 'Terjadi kesalahan saat login')
     }
-  }
 
-  // Get user profile and redirect based on role
-  const { data: { user } } = await supabase.auth.getUser()
-  
-  if (user) {
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('userid, username, roleid')
-      .eq('userid', user.id)
-      .single()
+    const { token, profile } = await res.json()
 
-    if (profile?.roleid) {
-      // Get role name
-      const { data: roleData } = await supabase
-        .from('role')
-        .select('rolename')
-        .eq('roleid', profile.roleid)
-        .single()
+    // Set the token cookie
+    const cookieStore = await cookies()
+    cookieStore.delete('auth-token') // Clear any existing token
+    cookieStore.set('auth-token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
+    })
 
-      const roleName = roleData?.rolename
-
-      // Redirect based on role
-      switch (roleName) {
-        case 'admin':
-          redirect('/dashboard')
-        case 'student':
-          redirect('/siswa')
-        case 'teacher':
-          redirect('/guru')
-        case 'guruwali':
-          redirect('/guruwali')
-        case 'parent':
-          redirect('/orangtua')
-        case 'unknown':
-          redirect('/unknown')
-        default:
-          redirect('/unknown')
-      }
-    } else {
-      redirect('/unknown')
+    // Redirect based on role
+    const role = profile?.role
+    switch (role) {
+      case 'admin':
+        redirect('/dashboard')
+      case 'siswa':
+        redirect('/siswa')
+      case 'guru':
+        redirect('/guru')
+      case 'guruwali':
+        redirect('/guruwali')
+      case 'orangtua':
+        redirect('/orangtua')
+      default:
+        redirect('/unknown')
     }
+  } catch (error) {
+    if (error instanceof Error) {
+      throw error
+    }
+    throw new Error('Terjadi kesalahan saat login')
   }
-
-  revalidatePath('/', 'layout')
-  redirect('/')
 }
 
-export async function signup(formData: FormData) {
-  const supabase = await createClient()
-
-  const data = {
-    email: formData.get('email') as string,
-    password: formData.get('password') as string,
-  }
-
-  const { error } = await supabase.auth.signUp(data)
-
-  if (error) {
-    redirect('/error')
-  }
-
-  // New signups always go to unknown for approval
-  revalidatePath('/', 'layout')
-  redirect('/unknown')
+export async function logout() {
+  const cookieStore = await cookies()
+  cookieStore.delete('auth-token')
+  redirect('/login')
 }
