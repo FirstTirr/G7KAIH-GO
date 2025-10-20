@@ -1,8 +1,18 @@
 import { createClient } from '@/utils/supabase/server'
 import { NextResponse } from 'next/server'
 
+const roleRedirectMap: Record<string, string> = {
+  unknown: '/unknown',
+  student: '/siswa',
+  teacher: '/guru',
+  parent: '/orangtua',
+  admin: '/dashboard',
+}
+
+const redirectTo = (path: string) => NextResponse.redirect(path)
+
 export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url)
+  const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
 
   if (code) {
@@ -86,24 +96,12 @@ export async function GET(request: Request) {
           console.log('Role name:', roleName) // Debug log
           
           // Redirect based on role
-          switch (roleName) {
-            case 'unknown':
-              return NextResponse.redirect(`${origin}/unknown`)
-            case 'student':
-              return NextResponse.redirect(`${origin}/siswa`)
-            case 'teacher':
-              return NextResponse.redirect(`${origin}/guru`)
-            case 'parent':
-              return NextResponse.redirect(`${origin}/orangtua`)
-            case 'admin':
-              return NextResponse.redirect(`${origin}/dashboard`)
-            default:
-              return NextResponse.redirect(`${origin}/unknown`)
-          }
+          const fallbackPath = roleRedirectMap[roleName ?? ''] ?? '/unknown'
+          return redirectTo(fallbackPath)
         } else {
           // No profile found, redirect to unknown
           console.log('No role found, redirecting to unknown')
-          return NextResponse.redirect(`${origin}/unknown`)
+          return redirectTo('/unknown')
         }
       }
     } else {
@@ -111,5 +109,5 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/auth/auth-code-error`)
+  return redirectTo('/auth/auth-code-error')
 }
