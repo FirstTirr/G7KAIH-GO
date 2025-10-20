@@ -10,7 +10,7 @@ export default function GoogleSignInButton() {
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        redirectTo: `${location.origin}/auth/callback`
+        redirectTo: 'https://g7kaih.tefa-bcs.org/auth/callback'
       }
     })
     
