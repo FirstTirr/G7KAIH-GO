@@ -9,10 +9,49 @@ const roleRedirectMap: Record<string, string> = {
   admin: '/dashboard',
 }
 
+function resolveAppOrigin(request: Request) {
+  const forwardedProto = request.headers.get('x-forwarded-proto')
+  const forwardedHost = request.headers.get('x-forwarded-host')
+  const forwardedPort = request.headers.get('x-forwarded-port')
+
+  if (forwardedProto && forwardedHost) {
+    const cleanedHost = forwardedPort && !forwardedHost.includes(':')
+      ? `${forwardedHost}:${forwardedPort}`
+      : forwardedHost
+    return `${forwardedProto}://${cleanedHost}`
+  }
+
+  const explicitAppUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_BASE_URL ||
+    process.env.SITE_URL
+
+  if (explicitAppUrl) {
+    return explicitAppUrl
+  }
+
+  const host = request.headers.get('host')
+  if (host) {
+    const protocol = request.url.startsWith('https') ? 'https' : 'http'
+    const origin = `${protocol}://${host}`
+    if (!origin.includes('localhost')) {
+      return origin
+    }
+  }
+
+  const derivedOrigin = new URL(request.url).origin
+  if (!derivedOrigin.includes('localhost')) {
+    return derivedOrigin
+  }
+
+  return 'https://g7kaih.tefa-bcs.org'
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
-  const redirectTo = (path: string) => NextResponse.redirect(new URL(path, request.url))
+  const origin = resolveAppOrigin(request)
+  const redirectTo = (path: string) => NextResponse.redirect(new URL(path, origin))
 
   if (code) {
     const supabase = await createClient()
