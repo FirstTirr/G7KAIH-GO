@@ -9,11 +9,10 @@ const roleRedirectMap: Record<string, string> = {
   admin: '/dashboard',
 }
 
-const redirectTo = (path: string) => NextResponse.redirect(path)
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url)
   const code = searchParams.get('code')
+  const redirectTo = (path: string) => NextResponse.redirect(new URL(path, request.url))
 
   if (code) {
     const supabase = await createClient()
